@@ -1,18 +1,19 @@
 #include "cli.h"
+#include <inttypes.h>
 
 typedef struct {
-    unsigned int number;
+    uint64_t number;
 } Example_Port;
 
 typedef struct {
-    unsigned int maximum_port;
+    uint64_t maximum_port;
 } ParseContext;
 
-static Cli_Status convert_port(Cli_Text text, void *destination, void *context, Cli_Error *error)
+static Cli_ParseStatus convert_port(Cli_TextSlice text, void *destination, void *context, Cli_ParseError *error)
 {
     ParseContext *limits = context;
-    unsigned int number;
-    Cli_Status status = cli_convert_unsigned(text, &number, NULL, error);
+    uint64_t number;
+    Cli_ParseStatus status = cli_convert_u64(text, &number, NULL, error);
     if (status != CLI_OK)
         return status;
     if (number == 0 || number > limits->maximum_port) {
@@ -29,7 +30,7 @@ static Cli_Status convert_port(Cli_Text text, void *destination, void *context, 
     CLI_ARG_FLAG(verbose, \
       .short_name = 'v', .long_name = "verbose", \
       .description = "Enable verbose output") \
-    CLI_ARG_UNSIGNED(count, .default_value = 4, \
+    CLI_ARG_U64(count, .default_value = 4, \
       .short_name = 'c', .long_name = "count", .label = "NUM", \
       .description = "Request count (default: 4)") \
     CLI_ARG(Example_Port, port, convert_port, .default_value = {80}, \
@@ -42,7 +43,7 @@ static Cli_Status convert_port(Cli_Text text, void *destination, void *context, 
 
 #include "cli.h"
 
-static int report_error(Cli_Status status, Cli_Error error)
+static int report_error(Cli_ParseStatus status, Cli_ParseError error)
 {
     fprintf(stderr, "argument error %d: %s\n", (int)status,
             error.message != NULL ? error.message : "invalid command line");
@@ -53,10 +54,10 @@ static int report_error(Cli_Status status, Cli_Error error)
 
 int main(int argc, char **argv)
 {
-    Cli_Arguments values;
+    Cli_ParsedArgs values;
     ParseContext context = {.maximum_port = 65535};
-    Cli_Error error = {0};
-    Cli_Status status = cli_parse(argc, argv, &values, &context, &error);
+    Cli_ParseError error = {0};
+    Cli_ParseStatus status = cli_parse(argc, argv, &values, &context, &error);
 
     if (status == CLI_HELP) {
         cli_print_help(stdout, argv[0]);
@@ -72,7 +73,7 @@ int main(int argc, char **argv)
     }
 
     if (values.verbose)
-        fprintf(stderr, "count=%u, port=%u\n", values.count, values.port.number);
+        fprintf(stderr, "count=%" PRIu64 ", port=%" PRIu64 "\n", values.count, values.port.number);
 
     fputs("host: ", stdout);
     fwrite(values.host.data, 1, values.host.length, stdout);

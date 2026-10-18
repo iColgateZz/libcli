@@ -3,14 +3,15 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 
 typedef struct {
     char *data;
     ptrdiff_t length;
-} Cli_Text;
+} Cli_TextSlice;
 
-#define CLI_TEXT(literal) ((Cli_Text){(literal), sizeof(literal) - 1})
+#define CLI_TEXT(literal) ((Cli_TextSlice){(literal), sizeof(literal) - 1})
 
 typedef enum {
     CLI_OK,
@@ -22,12 +23,12 @@ typedef enum {
     CLI_MISSING_ARGUMENT,
     CLI_DUPLICATE_ARGUMENT,
     CLI_INVALID_VALUE
-} Cli_Status;
+} Cli_ParseStatus;
 
-typedef struct Cli_Argument Cli_Argument;
-typedef struct Cli_Error Cli_Error;
+typedef struct Cli_ArgumentSpec Cli_ArgumentSpec;
+typedef struct Cli_ParseError Cli_ParseError;
 
-typedef Cli_Status (*Cli_Converter)(Cli_Text text, void *destination, void *context, Cli_Error *error);
+typedef Cli_ParseStatus (*Cli_Converter)(Cli_TextSlice text, void *destination, void *context, Cli_ParseError *error);
 
 typedef enum {
     CLI_VALUE_REQUIRED,
@@ -43,23 +44,23 @@ typedef enum {
     Cli_ValueMode value_mode;       \
     Cli_Converter convert;
 
-struct Cli_Argument {
+struct Cli_ArgumentSpec {
     CLI_PRIVATE_OPTION_FIELDS
     void *destination;
 };
 
-struct Cli_Error {
-    Cli_Argument argument;
-    Cli_Text input;
+struct Cli_ParseError {
+    Cli_ArgumentSpec argument;
+    Cli_TextSlice input;
     int argv_index;
     char *message;
 };
 
-Cli_Status cli_convert_flag(Cli_Text text, void *destination, void *context, Cli_Error *error);
-Cli_Status cli_convert_text(Cli_Text text, void *destination, void *context, Cli_Error *error);
-Cli_Status cli_convert_int(Cli_Text text, void *destination, void *context, Cli_Error *error);
-Cli_Status cli_convert_unsigned(Cli_Text text, void *destination, void *context, Cli_Error *error);
-Cli_Status cli_convert_double(Cli_Text text, void *destination, void *context, Cli_Error *error);
+Cli_ParseStatus cli_convert_flag(Cli_TextSlice text, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_convert_text(Cli_TextSlice text, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_convert_i64(Cli_TextSlice text, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_convert_u64(Cli_TextSlice text, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_convert_double(Cli_TextSlice text, void *destination, void *context, Cli_ParseError *error);
 
 #define CLI_ARG_FLAG(field, ...) \
     CLI_ARG(bool, field, cli_convert_flag, .value_mode = CLI_NO_VALUE, __VA_ARGS__)
@@ -68,17 +69,17 @@ Cli_Status cli_convert_double(Cli_Text text, void *destination, void *context, C
     CLI_ARG(double, field, cli_convert_double, __VA_ARGS__)
 
 #define CLI_ARG_TEXT(field, ...) \
-    CLI_ARG(Cli_Text, field, cli_convert_text, __VA_ARGS__)
+    CLI_ARG(Cli_TextSlice, field, cli_convert_text, __VA_ARGS__)
 
-#define CLI_ARG_INT(field, ...) \
-    CLI_ARG(int, field, cli_convert_int, __VA_ARGS__)
+#define CLI_ARG_I64(field, ...) \
+    CLI_ARG(int64_t, field, cli_convert_i64, __VA_ARGS__)
 
-#define CLI_ARG_UNSIGNED(field, ...) \
-    CLI_ARG(unsigned int, field, cli_convert_unsigned, __VA_ARGS__)
+#define CLI_ARG_U64(field, ...) \
+    CLI_ARG(uint64_t, field, cli_convert_u64, __VA_ARGS__)
 
-Cli_Status cli_internal_parse(Cli_Argument *arguments, bool *seen, size_t count, void *context,
-                              int argc, char *argv[], Cli_Error *error);
-void cli_internal_print_help(Cli_Argument *arguments, size_t count, FILE *stream, char *program);
+Cli_ParseStatus cli_internal_parse(Cli_ArgumentSpec *arguments, bool *seen, size_t count, void *context,
+                              int argc, char *argv[], Cli_ParseError *error);
+void cli_internal_print_help(Cli_ArgumentSpec *arguments, size_t count, FILE *stream, char *program);
 
 #endif
 
@@ -92,7 +93,7 @@ void cli_internal_print_help(Cli_Argument *arguments, size_t count, FILE *stream
 #define CLI_ARG(type, field, converter, ...) type field;
 typedef struct {
     CLI_ARGUMENTS
-} Cli_Arguments;
+} Cli_ParsedArgs;
 #undef CLI_ARG
 
 #define CLI_ARG(type, field, converter, ...) + 1
@@ -100,7 +101,7 @@ typedef struct {
 enum { CLI_ARGUMENT_COUNT = 1 CLI_ARGUMENTS };
 #undef CLI_ARG
 
-static inline void build_arguments(Cli_Argument arguments[CLI_ARGUMENT_COUNT], Cli_Arguments *out) {
+static inline void build_argument_spec(Cli_ArgumentSpec arguments[CLI_ARGUMENT_COUNT], Cli_ParsedArgs *out) {
     size_t index = 0;
 
 #define CLI_ARG(type, field, converter, ...) { \
@@ -110,7 +111,7 @@ static inline void build_arguments(Cli_Argument arguments[CLI_ARGUMENT_COUNT], C
                                                                             \
     if (out != NULL) out->field = settings.default_value;                   \
                                                                             \
-    arguments[index++] = (Cli_Argument) {                                   \
+    arguments[index++] = (Cli_ArgumentSpec) {                               \
         .short_name = settings.short_name, .long_name = settings.long_name, \
         .label = settings.label, .description = settings.description,       \
         .required = settings.required,                                      \
@@ -122,22 +123,22 @@ static inline void build_arguments(Cli_Argument arguments[CLI_ARGUMENT_COUNT], C
     CLI_ARGUMENTS
 #undef CLI_ARG
 
-    arguments[index] = (Cli_Argument){
+    arguments[index] = (Cli_ArgumentSpec){
         .short_name = 'h', .long_name = "help", .description = "Show usage",
         .value_mode = CLI_NO_VALUE, .convert = cli_convert_flag
     };
 }
 
-static inline Cli_Status cli_parse(int argc, char *argv[], Cli_Arguments *out, void *context, Cli_Error *error) {
-    Cli_Argument arguments[CLI_ARGUMENT_COUNT] = {0};
+static inline Cli_ParseStatus cli_parse(int argc, char *argv[], Cli_ParsedArgs *out, void *context, Cli_ParseError *error) {
+    Cli_ArgumentSpec arguments[CLI_ARGUMENT_COUNT] = {0};
     bool seen[CLI_ARGUMENT_COUNT] = {0};
     bool help_requested = false;
-    *error = (Cli_Error) {0};
+    *error = (Cli_ParseError) {0};
 
-    build_arguments(arguments, out);
+    build_argument_spec(arguments, out);
     arguments[CLI_ARGUMENT_COUNT - 1].destination = &help_requested;
 
-    Cli_Status status = cli_internal_parse(arguments, seen, CLI_ARGUMENT_COUNT, context, argc, argv, error);
+    Cli_ParseStatus status = cli_internal_parse(arguments, seen, CLI_ARGUMENT_COUNT, context, argc, argv, error);
 
     if (help_requested)
         return CLI_HELP;
@@ -158,8 +159,8 @@ static inline Cli_Status cli_parse(int argc, char *argv[], Cli_Arguments *out, v
 }
 
 static inline void cli_print_help(FILE *stream, char *program) {
-    Cli_Argument arguments[CLI_ARGUMENT_COUNT];
-    build_arguments(arguments, NULL);
+    Cli_ArgumentSpec arguments[CLI_ARGUMENT_COUNT];
+    build_argument_spec(arguments, NULL);
     cli_internal_print_help(arguments, CLI_ARGUMENT_COUNT, stream, program);
 }
 
