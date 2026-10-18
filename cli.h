@@ -9,19 +9,13 @@
 typedef enum {
     CLI_OK,
     CLI_HELP,
-    CLI_INVALID_SCHEMA,
-    CLI_UNKNOWN_OPTION,
-    CLI_UNEXPECTED_POSITIONAL,
-    CLI_MISSING_VALUE,
-    CLI_MISSING_ARGUMENT,
-    CLI_DUPLICATE_ARGUMENT,
-    CLI_INVALID_VALUE
+    CLI_ERROR
 } Cli_ParseStatus;
 
 typedef struct Cli_ArgumentSpec Cli_ArgumentSpec;
 typedef struct Cli_ParseError Cli_ParseError;
 
-typedef Cli_ParseStatus (*Cli_Converter)(char *text, void *destination, void *context, Cli_ParseError *error);
+typedef Cli_ParseStatus (*Cli_Converter)(char *input, void *destination, void *context, Cli_ParseError *error);
 
 typedef enum {
     CLI_VALUE_REQUIRED,
@@ -43,17 +37,15 @@ struct Cli_ArgumentSpec {
 };
 
 struct Cli_ParseError {
-    Cli_ArgumentSpec argument;
     char *input;
-    int argv_index;
     char *message;
 };
 
-Cli_ParseStatus cli_convert_flag(char *text, void *destination, void *context, Cli_ParseError *error);
-Cli_ParseStatus cli_convert_text(char *text, void *destination, void *context, Cli_ParseError *error);
-Cli_ParseStatus cli_convert_i64(char *text, void *destination, void *context, Cli_ParseError *error);
-Cli_ParseStatus cli_convert_u64(char *text, void *destination, void *context, Cli_ParseError *error);
-Cli_ParseStatus cli_convert_double(char *text, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_convert_flag(char *input, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_convert_text(char *input, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_convert_i64(char *input, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_convert_u64(char *input, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_convert_double(char *input, void *destination, void *context, Cli_ParseError *error);
 
 #define CLI_ARG_FLAG(field, ...) \
     CLI_ARG(bool, field, cli_convert_flag, .value_mode = CLI_NO_VALUE, __VA_ARGS__)
@@ -141,10 +133,10 @@ static inline Cli_ParseStatus cli_parse(int argc, char *argv[], Cli_ParsedArgs *
 
     for (size_t i = 0; i < CLI_ARGUMENT_COUNT; ++i) {
         if (arguments[i].required && !seen[i]) {
-            error->argument = arguments[i];
+            error->input = arguments[i].long_name ? arguments[i].long_name : arguments[i].label;
             error->message = "required argument is missing";
             
-            return CLI_MISSING_ARGUMENT;
+            return CLI_ERROR;
         }
     }
 

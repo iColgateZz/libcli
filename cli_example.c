@@ -1,5 +1,4 @@
 #include "cli.h"
-#include <inttypes.h>
 
 typedef struct {
     uint64_t number;
@@ -9,17 +8,18 @@ typedef struct {
     uint64_t maximum_port;
 } ParseContext;
 
-static Cli_ParseStatus convert_port(char *text, void *destination, void *context, Cli_ParseError *error) {
+static Cli_ParseStatus convert_port(char *input, void *destination, void *context, Cli_ParseError *error) {
     ParseContext *limits = context;
     uint64_t number;
-    Cli_ParseStatus status = cli_convert_u64(text, &number, NULL, error);
+    Cli_ParseStatus status = cli_convert_u64(input, &number, NULL, error);
 
     if (status != CLI_OK)
         return status;
 
     if (number == 0 || number > limits->maximum_port) {
+        error->input = input;
         error->message = "port is outside the allowed range";
-        return CLI_INVALID_VALUE;
+        return CLI_ERROR;
     }
 
     Example_Port *port = destination;
@@ -39,19 +39,18 @@ static Cli_ParseStatus convert_port(char *text, void *destination, void *context
 
 #include "cli.h"
 
-static int report_error(Cli_ParseStatus status, Cli_ParseError error) {
-    fprintf(stderr, "argument error %d: %s\n", status, error.message != NULL ? error.message : "invalid arg");
-    if (error.argv_index > 0)
-        fprintf(stderr, "at argv[%d]\n", error.argv_index);
-    return 2;
+static int report_error(Cli_ParseError error) {
+    fprintf(stderr, "argument error: %s\n", error.message ? error.message : "invalid arg");
+    if (error.input)
+        fprintf(stderr, "input: %s\n", error.input);
+    return -1;
 }
 
-int main(int argc, char **argv)
-{
-    Cli_ParsedArgs values;
+int main(int argc, char **argv) {
+    Cli_ParsedArgs args;
     ParseContext context = {.maximum_port = 65535};
-    Cli_ParseError error = {0};
-    Cli_ParseStatus status = cli_parse(argc, argv, &values, &context, &error);
+    Cli_ParseError error;
+    Cli_ParseStatus status = cli_parse(argc, argv, &args, &context, &error);
 
     if (status == CLI_HELP) {
         cli_print_help(stdout, argv[0]);
@@ -59,16 +58,16 @@ int main(int argc, char **argv)
     }
 
     if (status != CLI_OK)
-        return report_error(status, error);
+        return report_error(error);
 
-    if (values.count == 0) {
+    if (args.count == 0) {
         fprintf(stderr, "count must be positive\n");
-        return 2;
+        return -1;
     }
 
-    if (values.verbose)
-        fprintf(stderr, "count=%" PRIu64 ", port=%" PRIu64 "\n", values.count, values.port.number);
+    if (args.verbose)
+        fprintf(stderr, "count=%lld, port=%lld\n", args.count, args.port.number);
 
-    printf("host: %s\noutput: %s\n", values.host, values.output);
-    return ferror(stdout) ? 2 : 0;
+    printf("host: %s\noutput: %s\n", args.host, args.output);
+    return ferror(stdout) ? -1 : 0;
 }
