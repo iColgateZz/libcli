@@ -15,7 +15,7 @@ typedef enum {
 typedef struct Cli_ArgumentSpec Cli_ArgumentSpec;
 typedef struct Cli_ParseError Cli_ParseError;
 
-typedef Cli_ParseStatus (*Cli_Converter)(char *input, void *destination, void *context, Cli_ParseError *error);
+typedef Cli_ParseStatus (*Cli_Parser)(char *input, void *destination, void *context, Cli_ParseError *error);
 
 typedef enum {
     CLI_VALUE_REQUIRED,
@@ -29,7 +29,7 @@ typedef enum {
     char *description;              \
     bool required;                  \
     Cli_ValueMode value_mode;       \
-    Cli_Converter convert;
+    Cli_Parser parse;
 
 struct Cli_ArgumentSpec {
     CLI_PRIVATE_OPTION_FIELDS
@@ -41,26 +41,26 @@ struct Cli_ParseError {
     char *message;
 };
 
-Cli_ParseStatus cli_convert_flag(char *input, void *destination, void *context, Cli_ParseError *error);
-Cli_ParseStatus cli_convert_text(char *input, void *destination, void *context, Cli_ParseError *error);
-Cli_ParseStatus cli_convert_i64(char *input, void *destination, void *context, Cli_ParseError *error);
-Cli_ParseStatus cli_convert_u64(char *input, void *destination, void *context, Cli_ParseError *error);
-Cli_ParseStatus cli_convert_double(char *input, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_parse_flag(char *input, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_parse_text(char *input, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_parse_i64(char *input, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_parse_u64(char *input, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_parse_double(char *input, void *destination, void *context, Cli_ParseError *error);
 
 #define CLI_ARG_FLAG(field, ...) \
-    CLI_ARG(bool, field, cli_convert_flag, .value_mode = CLI_NO_VALUE, __VA_ARGS__)
+    CLI_ARG(bool, field, cli_parse_flag, .value_mode = CLI_NO_VALUE, __VA_ARGS__)
 
 #define CLI_ARG_DOUBLE(field, ...) \
-    CLI_ARG(double, field, cli_convert_double, __VA_ARGS__)
+    CLI_ARG(double, field, cli_parse_double, __VA_ARGS__)
 
 #define CLI_ARG_TEXT(field, ...) \
-    CLI_ARG(char *, field, cli_convert_text, __VA_ARGS__)
+    CLI_ARG(char *, field, cli_parse_text, __VA_ARGS__)
 
 #define CLI_ARG_I64(field, ...) \
-    CLI_ARG(int64_t, field, cli_convert_i64, __VA_ARGS__)
+    CLI_ARG(int64_t, field, cli_parse_i64, __VA_ARGS__)
 
 #define CLI_ARG_U64(field, ...) \
-    CLI_ARG(uint64_t, field, cli_convert_u64, __VA_ARGS__)
+    CLI_ARG(uint64_t, field, cli_parse_u64, __VA_ARGS__)
 
 Cli_ParseStatus cli_internal_parse(Cli_ArgumentSpec *arguments, bool *seen, size_t count, void *context,
                               int argc, char *argv[], Cli_ParseError *error);
@@ -75,13 +75,13 @@ void cli_internal_print_help(Cli_ArgumentSpec *arguments, size_t count, FILE *st
 #error "CLI_ARG must be undefined when generating the schema"
 #else
 
-#define CLI_ARG(type, field, converter, ...) type field;
+#define CLI_ARG(type, field, parser, ...) type field;
 typedef struct {
     CLI_ARGUMENTS
 } Cli_ParsedArgs;
 #undef CLI_ARG
 
-#define CLI_ARG(type, field, converter, ...) + 1
+#define CLI_ARG(type, field, parser, ...) + 1
 // +1 for help
 enum { CLI_ARGUMENT_COUNT = 1 CLI_ARGUMENTS };
 #undef CLI_ARG
@@ -89,9 +89,9 @@ enum { CLI_ARGUMENT_COUNT = 1 CLI_ARGUMENTS };
 static inline void build_argument_spec(Cli_ArgumentSpec arguments[CLI_ARGUMENT_COUNT], Cli_ParsedArgs *out) {
     size_t index = 0;
 
-#define CLI_ARG(type, field, converter, ...) { \
+#define CLI_ARG(type, field, parser, ...) { \
     struct { type default_value; CLI_PRIVATE_OPTION_FIELDS } settings = {   \
-        .convert = (converter), __VA_ARGS__                                 \
+        .parse = (parser), __VA_ARGS__                                 \
     };                                                                      \
                                                                             \
     if (out != NULL) out->field = settings.default_value;                   \
@@ -100,7 +100,7 @@ static inline void build_argument_spec(Cli_ArgumentSpec arguments[CLI_ARGUMENT_C
         .short_name = settings.short_name, .long_name = settings.long_name, \
         .label = settings.label, .description = settings.description,       \
         .required = settings.required,                                      \
-        .value_mode = settings.value_mode, .convert = settings.convert,     \
+        .value_mode = settings.value_mode, .parse = settings.parse,     \
         .destination = out != NULL ? &out->field : NULL                     \
     };                                                                      \
 }
@@ -110,7 +110,7 @@ static inline void build_argument_spec(Cli_ArgumentSpec arguments[CLI_ARGUMENT_C
 
     arguments[index] = (Cli_ArgumentSpec){
         .short_name = 'h', .long_name = "help", .description = "Show usage",
-        .value_mode = CLI_NO_VALUE, .convert = cli_convert_flag
+        .value_mode = CLI_NO_VALUE, .parse = cli_parse_flag
     };
 }
 

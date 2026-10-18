@@ -10,19 +10,19 @@ static Cli_ParseStatus set_error(Cli_ParseError *error, char *input, char *messa
     return CLI_ERROR;
 }
 
-Cli_ParseStatus cli_convert_flag(char *input, void *destination, void *context, Cli_ParseError *error) {
+Cli_ParseStatus cli_parse_flag(char *input, void *destination, void *context, Cli_ParseError *error) {
     (void)input; (void)context; (void)error;
     *(bool *)destination = true;
     return CLI_OK;
 }
 
-Cli_ParseStatus cli_convert_text(char *input, void *destination, void *context, Cli_ParseError *error) {
+Cli_ParseStatus cli_parse_text(char *input, void *destination, void *context, Cli_ParseError *error) {
     (void)context; (void)error;
     *(char **)destination = input;
     return CLI_OK;
 }
 
-Cli_ParseStatus cli_convert_i64(char *input, void *destination, void *context, Cli_ParseError *error) {
+Cli_ParseStatus cli_parse_i64(char *input, void *destination, void *context, Cli_ParseError *error) {
     (void)context;
     char *end;
     errno = 0;
@@ -34,7 +34,7 @@ Cli_ParseStatus cli_convert_i64(char *input, void *destination, void *context, C
     return CLI_OK;
 }
 
-Cli_ParseStatus cli_convert_u64(char *input, void *destination, void *context, Cli_ParseError *error) {
+Cli_ParseStatus cli_parse_u64(char *input, void *destination, void *context, Cli_ParseError *error) {
     (void)context;
     char *end;
     errno = 0;
@@ -46,7 +46,7 @@ Cli_ParseStatus cli_convert_u64(char *input, void *destination, void *context, C
     return CLI_OK;
 }
 
-Cli_ParseStatus cli_convert_double(char *input, void *destination, void *context, Cli_ParseError *error) {
+Cli_ParseStatus cli_parse_double(char *input, void *destination, void *context, Cli_ParseError *error) {
     (void)context;
     char *end;
     errno = 0;
@@ -67,7 +67,7 @@ Cli_ParseStatus cli_internal_parse(Cli_ArgumentSpec *arguments, bool *seen, usiz
         seen[i] = false;
 
         char *message = NULL;
-        if (!argument->convert) message = "argument needs a converter";
+        if (!argument->parse) message = "argument needs a parser";
 
         else if (argument->value_mode != CLI_VALUE_REQUIRED && argument->value_mode != CLI_NO_VALUE)
             message = "invalid value mode";
@@ -156,7 +156,7 @@ Cli_ParseStatus cli_internal_parse(Cli_ArgumentSpec *arguments, bool *seen, usiz
             }
 
             *error = (Cli_ParseError){0};
-            Cli_ParseStatus status = argument->convert(value, argument->destination, context, error);
+            Cli_ParseStatus status = argument->parse(value, argument->destination, context, error);
             if (status != CLI_OK) {
                 if (error->input == NULL) error->input = value;
                 if (error->message == NULL) error->message = "invalid argument value";
