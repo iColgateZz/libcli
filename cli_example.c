@@ -9,7 +9,7 @@ typedef struct {
     uint64_t maximum_port;
 } ParseContext;
 
-static Cli_ParseStatus convert_port(Cli_TextSlice text, void *destination, void *context, Cli_ParseError *error) {
+static Cli_ParseStatus convert_port(char *text, void *destination, void *context, Cli_ParseError *error) {
     ParseContext *limits = context;
     uint64_t number;
     Cli_ParseStatus status = cli_convert_u64(text, &number, NULL, error);
@@ -35,7 +35,7 @@ static Cli_ParseStatus convert_port(Cli_TextSlice text, void *destination, void 
     CLI_ARG(Example_Port, port, convert_port, .default_value = {80}, \
       .short_name = 'p', .long_name = "port", .label = "PORT", .description = "Port") \
     CLI_ARG_TEXT(host, .required = true, .label = "HOST", .description = "Target host") \
-    CLI_ARG_TEXT(output, .default_value = CLI_TEXT("console"), .label = "OUTPUT", .description = "Output destination")
+    CLI_ARG_TEXT(output, .default_value = "console", .label = "OUTPUT", .description = "Output destination")
 
 #include "cli.h"
 
@@ -69,10 +69,6 @@ int main(int argc, char **argv)
     if (values.verbose)
         fprintf(stderr, "count=%" PRIu64 ", port=%" PRIu64 "\n", values.count, values.port.number);
 
-    fputs("host: ", stdout);
-    fwrite(values.host.data, 1, values.host.length, stdout);
-    fputs("\noutput: ", stdout);
-    fwrite(values.output.data, 1, values.output.length, stdout);
-    fputc('\n', stdout);
+    printf("host: %s\noutput: %s\n", values.host, values.output);
     return ferror(stdout) ? 2 : 0;
 }
