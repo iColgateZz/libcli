@@ -9,44 +9,38 @@ typedef struct {
     uint64_t maximum_port;
 } ParseContext;
 
-static Cli_ParseStatus convert_port(Cli_TextSlice text, void *destination, void *context, Cli_ParseError *error)
-{
+static Cli_ParseStatus convert_port(Cli_TextSlice text, void *destination, void *context, Cli_ParseError *error) {
     ParseContext *limits = context;
     uint64_t number;
     Cli_ParseStatus status = cli_convert_u64(text, &number, NULL, error);
+
     if (status != CLI_OK)
         return status;
+
     if (number == 0 || number > limits->maximum_port) {
-        if (error != NULL)
-            error->message = "port is outside the allowed range";
+        error->message = "port is outside the allowed range";
         return CLI_INVALID_VALUE;
     }
+
     Example_Port *port = destination;
     port->number = number;
+
     return CLI_OK;
 }
 
 #define CLI_ARGUMENTS \
-    CLI_ARG_FLAG(verbose, \
-      .short_name = 'v', .long_name = "verbose", \
-      .description = "Enable verbose output") \
-    CLI_ARG_U64(count, .default_value = 4, \
-      .short_name = 'c', .long_name = "count", .label = "NUM", \
-      .description = "Request count (default: 4)") \
+    CLI_ARG_FLAG(verbose, .short_name = 'v', .long_name = "verbose", .description = "Enable verbose output") \
+    CLI_ARG_U64(count, .default_value = 4, .short_name = 'c', .long_name = "count", \
+        .label = "NUM", .description = "Request count") \
     CLI_ARG(Example_Port, port, convert_port, .default_value = {80}, \
-      .short_name = 'p', .long_name = "port", .label = "PORT", \
-      .description = "Port (default: 80)") \
-    CLI_ARG_TEXT(host, \
-      .required = true, .label = "HOST", .description = "Target host") \
-    CLI_ARG_TEXT(output, .default_value = CLI_TEXT("console"), \
-      .label = "OUTPUT", .description = "Output destination (default: console)")
+      .short_name = 'p', .long_name = "port", .label = "PORT", .description = "Port") \
+    CLI_ARG_TEXT(host, .required = true, .label = "HOST", .description = "Target host") \
+    CLI_ARG_TEXT(output, .default_value = CLI_TEXT("console"), .label = "OUTPUT", .description = "Output destination")
 
 #include "cli.h"
 
-static int report_error(Cli_ParseStatus status, Cli_ParseError error)
-{
-    fprintf(stderr, "argument error %d: %s\n", (int)status,
-            error.message != NULL ? error.message : "invalid command line");
+static int report_error(Cli_ParseStatus status, Cli_ParseError error) {
+    fprintf(stderr, "argument error %d: %s\n", status, error.message != NULL ? error.message : "invalid arg");
     if (error.argv_index > 0)
         fprintf(stderr, "at argv[%d]\n", error.argv_index);
     return 2;
