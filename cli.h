@@ -6,13 +6,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-typedef struct {
-    char *data;
-    ptrdiff_t length;
-} Cli_TextSlice;
-
-#define CLI_TEXT(literal) ((Cli_TextSlice){(literal), sizeof(literal) - 1})
-
 typedef enum {
     CLI_OK,
     CLI_HELP,
@@ -28,7 +21,7 @@ typedef enum {
 typedef struct Cli_ArgumentSpec Cli_ArgumentSpec;
 typedef struct Cli_ParseError Cli_ParseError;
 
-typedef Cli_ParseStatus (*Cli_Converter)(Cli_TextSlice text, void *destination, void *context, Cli_ParseError *error);
+typedef Cli_ParseStatus (*Cli_Converter)(char *text, void *destination, void *context, Cli_ParseError *error);
 
 typedef enum {
     CLI_VALUE_REQUIRED,
@@ -51,16 +44,16 @@ struct Cli_ArgumentSpec {
 
 struct Cli_ParseError {
     Cli_ArgumentSpec argument;
-    Cli_TextSlice input;
+    char *input;
     int argv_index;
     char *message;
 };
 
-Cli_ParseStatus cli_convert_flag(Cli_TextSlice text, void *destination, void *context, Cli_ParseError *error);
-Cli_ParseStatus cli_convert_text(Cli_TextSlice text, void *destination, void *context, Cli_ParseError *error);
-Cli_ParseStatus cli_convert_i64(Cli_TextSlice text, void *destination, void *context, Cli_ParseError *error);
-Cli_ParseStatus cli_convert_u64(Cli_TextSlice text, void *destination, void *context, Cli_ParseError *error);
-Cli_ParseStatus cli_convert_double(Cli_TextSlice text, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_convert_flag(char *text, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_convert_text(char *text, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_convert_i64(char *text, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_convert_u64(char *text, void *destination, void *context, Cli_ParseError *error);
+Cli_ParseStatus cli_convert_double(char *text, void *destination, void *context, Cli_ParseError *error);
 
 #define CLI_ARG_FLAG(field, ...) \
     CLI_ARG(bool, field, cli_convert_flag, .value_mode = CLI_NO_VALUE, __VA_ARGS__)
@@ -69,7 +62,7 @@ Cli_ParseStatus cli_convert_double(Cli_TextSlice text, void *destination, void *
     CLI_ARG(double, field, cli_convert_double, __VA_ARGS__)
 
 #define CLI_ARG_TEXT(field, ...) \
-    CLI_ARG(Cli_TextSlice, field, cli_convert_text, __VA_ARGS__)
+    CLI_ARG(char *, field, cli_convert_text, __VA_ARGS__)
 
 #define CLI_ARG_I64(field, ...) \
     CLI_ARG(int64_t, field, cli_convert_i64, __VA_ARGS__)
