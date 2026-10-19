@@ -1,6 +1,5 @@
 #define CLI_IMPLEMENTATION
 #include "cli.h"
-#include <inttypes.h>
 
 typedef struct {
     uint64_t number;
@@ -71,7 +70,7 @@ int main(int argc, char **argv) {
     }
 
     if (args.verbose)
-        fprintf(stderr, "count=%" PRIu64 ", port=%" PRIu64 "\n", args.count, args.port.number);
+        fprintf(stderr, "count=%lld, port=%lld\n", args.count, args.port.number);
 
     printf("host: %s\noutput: %s\n", args.host, args.output);
     return 0;
