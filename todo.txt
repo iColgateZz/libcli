@@ -1,4 +1,2 @@
-1. Repeated options list
-2. Trailing positional arguments list
-3. Defaults in help text
-4. Subcommand schemas and help messages
+1. Defaults in help text
+2. Subcommand schemas and help messages
