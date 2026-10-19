@@ -160,6 +160,9 @@ static Cli_ParseStatus cli_internal_parse(ArgumentSpec arguments[CLI_ARGUMENT_CO
 static void cli_internal_build_argument_spec(ArgumentSpec arguments[CLI_ARGUMENT_COUNT], Cli_ParsedArgs *out);
 static void cli_internal_print_usage(ArgumentSpec arguments[CLI_ARGUMENT_COUNT], FILE *stream, char *program);
 static void cli_internal_print_help(ArgumentSpec arguments[CLI_ARGUMENT_COUNT], FILE *stream);
+#ifndef NDEBUG
+static Cli_ParseStatus cli_internal_validate_argument_spec(ArgumentSpec arguments[CLI_ARGUMENT_COUNT], Cli_ParseError *error);
+#endif
 
 Cli_ParseStatus cli_parse(int argc, char *argv[], Cli_ParsedArgs *out, void *context, Cli_ParseError *error) {
     ArgumentSpec arguments[CLI_ARGUMENT_COUNT] = {0};
@@ -185,6 +188,111 @@ Cli_ParseStatus cli_parse(int argc, char *argv[], Cli_ParsedArgs *out, void *con
             
             return CLI_ERROR;
         }
+    }
+
+    return CLI_OK;
+}
+
+static Cli_ParseStatus cli_internal_parse(ArgumentSpec arguments[CLI_ARGUMENT_COUNT], bool seen[CLI_ARGUMENT_COUNT],
+                                          void *context, int argc, char *argv[], Cli_ParseError *error) {
+#ifndef NDEBUG
+    Cli_ParseStatus status = cli_internal_validate_argument_spec(arguments, error);
+    if (status != CLI_OK) return status;
+#endif
+
+    for (size_t i = 0; i < CLI_ARGUMENT_COUNT; ++i) seen[i] = false;
+
+    bool allow_options = true;
+    size_t positional = 0;
+    for (int i = 1; i < argc; ++i) {
+        char *token = argv[i];
+        if (allow_options && strcmp(token, "--") == 0) {
+            allow_options = false;
+            continue;
+        }
+
+        bool named = allow_options && token[0] == '-' && token[1] != '\0';
+        bool long_option = named && token[1] == '-';
+
+        char *short_cursor = (named && !long_option) ? token + 1 : NULL;
+        char *equals = long_option ? strchr(token + 2, '=') : NULL;
+
+        do {
+            size_t match = CLI_ARGUMENT_COUNT;
+
+            if (!named) {
+                while (positional < CLI_ARGUMENT_COUNT 
+                       && (arguments[positional].short_name || arguments[positional].long_name))
+                    ++positional;
+
+                if (positional < CLI_ARGUMENT_COUNT) match = positional++;
+            }
+            else if (long_option) {
+                char *option_name = token + 2;
+                size_t name_length = equals ? (size_t)(equals - option_name) : strlen(option_name);
+
+                for (size_t j = 0; j < CLI_ARGUMENT_COUNT; ++j) {
+                    char *name = arguments[j].long_name;
+                    if (name && strlen(name) == name_length && memcmp(name, option_name, name_length) == 0) {
+                        match = j;
+                        break;
+                    }
+                }
+            }
+            else {
+                char option_name = *short_cursor;
+                for (size_t j = 0; j < CLI_ARGUMENT_COUNT; ++j) {
+                    if (arguments[j].short_name == option_name) {
+                        match = j;
+                        break;
+                    }
+                }
+
+                // Advance when multple flags are behind one dash. E.g. -xyz.
+                ++short_cursor;
+            }
+
+            // No candidate found
+            if (match == CLI_ARGUMENT_COUNT) {
+                char *message = named ? "unknown option" : "unexpected positional argument";
+                return cli_internal_set_error(error, token, message);
+            }
+
+            if (seen[match])
+                return cli_internal_set_error(error, token, "argument is duplicated");
+            
+            ArgumentSpec *argument = &arguments[match];
+            char *value = NULL;
+            if (argument->value_mode == CLI_VALUE_REQUIRED) {
+                if (!named) 
+                    value = token;
+                else if (equals != NULL) 
+                    value = equals + 1;
+                else if (short_cursor != NULL && *short_cursor != '\0')
+                    // Take value directly attached to a short option
+                    value = short_cursor;
+                else if (i + 1 < argc)
+                    value = argv[++i];
+                else
+                    return cli_internal_set_error(error, token, "option requires a value");
+
+                // Short option is consumed fully or it is NULL from the start
+                short_cursor = NULL;
+            } 
+            else if (equals != NULL) {
+                return cli_internal_set_error(error, token, "flag does not take a value");
+            }
+
+            *error = (Cli_ParseError){0};
+            Cli_ParseStatus status = argument->parse(value, argument->destination, context, error);
+            if (status != CLI_OK) {
+                if (error->input == NULL) error->input = value;
+                if (error->message == NULL) error->message = "invalid argument value";
+                return status;
+            }
+
+            seen[match] = true;
+        } while (short_cursor != NULL && *short_cursor != '\0');
     }
 
     return CLI_OK;
@@ -238,101 +346,6 @@ cli_internal_validate_argument_spec(ArgumentSpec arguments[CLI_ARGUMENT_COUNT], 
     return CLI_OK;
 }
 #endif //NDEBUG
-
-static Cli_ParseStatus cli_internal_parse(ArgumentSpec arguments[CLI_ARGUMENT_COUNT], bool seen[CLI_ARGUMENT_COUNT],
-                                          void *context, int argc, char *argv[], Cli_ParseError *error) {
-#ifndef NDEBUG
-    Cli_ParseStatus status = cli_internal_validate_argument_spec(arguments, error);
-    if (status != CLI_OK) return status;
-#endif
-
-    for (size_t i = 0; i < CLI_ARGUMENT_COUNT; ++i) seen[i] = false;
-
-    bool allow_options = true;
-    size_t positional = 0;
-    for (int i = 1; i < argc; ++i) {
-        char *token = argv[i];
-        if (allow_options && strcmp(token, "--") == 0) {
-            allow_options = false;
-            continue;
-        }
-
-        bool named = allow_options && token[0] == '-' && token[1] != '\0';
-        bool long_option = named && token[1] == '-';
-
-        char *short_cursor = (named && !long_option) ? token + 1 : NULL;
-        char *equals = long_option ? strchr(token + 2, '=') : NULL;
-
-        do {
-            size_t match = CLI_ARGUMENT_COUNT;
-
-            if (named) {
-                for (size_t j = 0; j < CLI_ARGUMENT_COUNT; ++j) {
-                    if (long_option) {
-                        char *name = arguments[j].long_name;
-                        size_t expected_len = equals ? (size_t)(equals - token - 2) : strlen(token + 2);
-
-                        if (name && strlen(name) == expected_len && memcmp(name, token + 2, expected_len) == 0)
-                            match = j;
-                    } 
-                    else if (arguments[j].short_name == *short_cursor) {
-                        match = j;
-                    }
-                }
-
-                // Advance when multple flags are behind one dash. E.g. -xyz.
-                if (short_cursor != NULL) ++short_cursor;
-            } 
-            else {
-                while (positional < CLI_ARGUMENT_COUNT && (arguments[positional].short_name || arguments[positional].long_name))
-                    ++positional;
-                if (positional < CLI_ARGUMENT_COUNT) match = positional++;
-            }
-
-            // No candidate found
-            if (match == CLI_ARGUMENT_COUNT) {
-                char *message = named ? "unknown option" : "unexpected positional argument";
-                return cli_internal_set_error(error, token, message);
-            }
-
-            if (seen[match])
-                return cli_internal_set_error(error, token, "argument is duplicated");
-            
-            ArgumentSpec *argument = &arguments[match];
-            char *value = NULL;
-            if (argument->value_mode == CLI_VALUE_REQUIRED) {
-                if (!named) 
-                    value = token;
-                else if (equals != NULL) 
-                    value = equals + 1;
-                else if (short_cursor != NULL && *short_cursor != '\0')
-                    // Take value directly attached to a short option
-                    value = short_cursor;
-                else if (i + 1 < argc)
-                    value = argv[++i];
-                else
-                    return cli_internal_set_error(error, token, "option requires a value");
-
-                // Short option is consumed fully or it is NULL from the start
-                short_cursor = NULL;
-            } 
-            else if (equals != NULL) {
-                return cli_internal_set_error(error, token, "flag does not take a value");
-            }
-
-            Cli_ParseStatus status = argument->parse(value, argument->destination, context, error);
-            if (status != CLI_OK) {
-                if (error->input == NULL) error->input = value;
-                if (error->message == NULL) error->message = "invalid argument value";
-                return status;
-            }
-
-            seen[match] = true;
-        } while (short_cursor != NULL && *short_cursor != '\0');
-    }
-
-    return CLI_OK;
-}
 
 typedef enum {
     ARGUMENT_GROUP_FLAG,
