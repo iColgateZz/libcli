@@ -1,4 +1,6 @@
+#define CLI_IMPLEMENTATION
 #include "cli.h"
+#include <inttypes.h>
 
 typedef struct {
     uint64_t number;
@@ -6,10 +8,10 @@ typedef struct {
 
 typedef struct {
     uint64_t maximum_port;
-} ParseContext;
+} Example_ParseContext;
 
 static Cli_ParseStatus parse_port(char *input, void *destination, void *context, Cli_ParseError *error) {
-    ParseContext *limits = context;
+    Example_ParseContext *limits = context;
     uint64_t number;
     Cli_ParseStatus status = cli_parse_u64(input, &number, NULL, error);
 
@@ -38,11 +40,12 @@ static Cli_ParseStatus parse_port(char *input, void *destination, void *context,
     CLI_ARG_TEXT(output, .default_value = "console", .label = "out", .description = "Output destination")
 
 #include "cli.h"
+#undef CLI_ARGUMENTS
 
 
 int main(int argc, char **argv) {
     Cli_ParsedArgs args;
-    ParseContext context = {.maximum_port = 65535};
+    Example_ParseContext context = {.maximum_port = 65535};
     Cli_ParseError error;
     Cli_ParseStatus status = cli_parse(argc, argv, &args, &context, &error);
 
@@ -68,7 +71,7 @@ int main(int argc, char **argv) {
     }
 
     if (args.verbose)
-        fprintf(stderr, "count=%lld, port=%lld\n", args.count, args.port.number);
+        fprintf(stderr, "count=%" PRIu64 ", port=%" PRIu64 "\n", args.count, args.port.number);
 
     printf("host: %s\noutput: %s\n", args.host, args.output);
     return 0;
