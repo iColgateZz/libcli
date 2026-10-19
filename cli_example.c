@@ -48,7 +48,8 @@ int main(int argc, char **argv) {
 
     if (status == CLI_HELP) {
         cli_print_usage(stderr, argv[0]);
-        cli_print_help(stderr, argv[0]);
+        fputc('\n', stderr);
+        cli_print_help(stderr);
         return 0;
     }
 

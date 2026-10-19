@@ -64,7 +64,7 @@ Cli_ParseStatus cli_parse_double(char *input, void *destination, void *context, 
 Cli_ParseStatus cli_internal_parse(Cli_ArgumentSpec *arguments, bool *seen, size_t count, void *context,
                               int argc, char *argv[], Cli_ParseError *error);
 void cli_internal_print_usage(Cli_ArgumentSpec *arguments, size_t count, FILE *stream, char *program);
-void cli_internal_print_help(Cli_ArgumentSpec *arguments, size_t count, FILE *stream, char *program);
+void cli_internal_print_help(Cli_ArgumentSpec *arguments, size_t count, FILE *stream);
 
 #endif
 
@@ -149,10 +149,10 @@ static inline void cli_print_usage(FILE *stream, char *program) {
     cli_internal_print_usage(arguments, CLI_ARGUMENT_COUNT, stream, program);
 }
 
-static inline void cli_print_help(FILE *stream, char *program) {
+static inline void cli_print_help(FILE *stream) {
     Cli_ArgumentSpec arguments[CLI_ARGUMENT_COUNT];
     build_argument_spec(arguments, NULL);
-    cli_internal_print_help(arguments, CLI_ARGUMENT_COUNT, stream, program);
+    cli_internal_print_help(arguments, CLI_ARGUMENT_COUNT, stream);
 }
 
 #endif

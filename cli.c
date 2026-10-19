@@ -5,6 +5,9 @@
 #include <inttypes.h>
 #include <math.h>
 
+#define CLI_BOLD(text) "\033[1m" text "\033[0m"
+#define CLI_UNDERLINE(text) "\033[4m" text "\033[0m"
+
 static Cli_ParseStatus set_error(Cli_ParseError *error, char *input, char *message) {
     *error = (Cli_ParseError) {.input = input, .message = message};
     return CLI_ERROR;
@@ -182,7 +185,7 @@ static ArgumentGroup argument_group(Cli_ArgumentSpec *argument) {
 }
 
 void cli_internal_print_usage(Cli_ArgumentSpec *arguments, usize count, FILE *stream, char *program) {
-    fprintf(stream, "usage: %s", program);
+    fprintf(stream, "Usage: %s", program);
 
     bool short_flags = false;
     for (usize i = 0; i < count; ++i) {
@@ -220,28 +223,37 @@ void cli_internal_print_usage(Cli_ArgumentSpec *arguments, usize count, FILE *st
     fputc('\n', stream);
 }
 
-void cli_internal_print_help(Cli_ArgumentSpec *arguments, usize count, FILE *stream, char *program) {
-    fputs("arguments:\n", stream);
+void cli_internal_print_help(Cli_ArgumentSpec *arguments, usize count, FILE *stream) {
+    fputs("Arguments:\n", stream);
 
     for (ArgumentGroup group = ARGUMENT_GROUP_FLAG; group < ARGUMENT_GROUP_COUNT; ++group) {
         for (usize i = 0; i < count; ++i) {
             Cli_ArgumentSpec *argument = &arguments[i];
             if (argument_group(argument) != group) continue;
 
+            char *label = argument->label ? argument->label : "value";
             fputs("  ", stream);
-            if (argument->short_name) fprintf(stream, "-%c", argument->short_name);
-            if (argument->long_name) fprintf(stream, "%s--%s", argument->short_name ? ", " : "", argument->long_name);
 
-            if (argument->value_mode == CLI_VALUE_REQUIRED) {
-                char *label = argument->label ? argument->label : "value";
-                if (group != ARGUMENT_GROUP_POSITIONAL) fputc(' ', stream);
-                fprintf(stream, "%s", label);
+            if (argument->short_name) {
+                fprintf(stream, CLI_BOLD("-%c"), argument->short_name);
+                if (argument->value_mode == CLI_VALUE_REQUIRED)
+                    fprintf(stream, " " CLI_UNDERLINE("%s"), label);
             }
+
+            if (argument->long_name) {
+                if (argument->short_name) fputs(", ", stream);
+                fprintf(stream, CLI_BOLD("--%s"), argument->long_name);
+                if (argument->value_mode == CLI_VALUE_REQUIRED)
+                    fprintf(stream, "=" CLI_UNDERLINE("%s"), label);
+            }
+
+            if (group == ARGUMENT_GROUP_POSITIONAL) fprintf(stream, CLI_UNDERLINE("%s"), label);
 
             if (argument->required) fputs(" (required)", stream);
             fputc('\n', stream);
 
             if (argument->description != NULL) fprintf(stream, "      %s\n", argument->description);
+            fputc('\n', stream);
         }
     }
 }
