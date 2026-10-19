@@ -13,6 +13,7 @@ typedef enum {
 } Cli_ParseStatus;
 
 typedef struct Cli_ParseError Cli_ParseError;
+typedef struct Cli_ParsedArgs Cli_ParsedArgs;
 
 typedef Cli_ParseStatus (*Cli_Parser)(char *input, void *destination, void *context, Cli_ParseError *error);
 
@@ -21,24 +22,14 @@ typedef enum {
     CLI_NO_VALUE
 } Cli_ValueMode;
 
-#define CLI_PRIVATE_OPTION_FIELDS   \
-    char short_name;                \
-    char *long_name;                \
-    char *label;                    \
-    char *description;              \
-    bool required;                  \
-    Cli_ValueMode value_mode;       \
-    Cli_Parser parse;
-
-typedef struct {
-    CLI_PRIVATE_OPTION_FIELDS
-    void *destination;
-} Cli_ArgumentSpec;
-
 struct Cli_ParseError {
     char *input;
     char *message;
 };
+
+Cli_ParseStatus cli_parse(int argc, char *argv[], Cli_ParsedArgs *out, void *context, Cli_ParseError *error);
+void cli_print_usage(FILE *stream, char *program);
+void cli_print_help(FILE *stream);
 
 Cli_ParseStatus cli_parse_flag(char *input, void *destination, void *context, Cli_ParseError *error);
 Cli_ParseStatus cli_parse_text(char *input, void *destination, void *context, Cli_ParseError *error);
@@ -61,11 +52,6 @@ Cli_ParseStatus cli_parse_double(char *input, void *destination, void *context, 
 #define CLI_ARG_U64(field, ...) \
     CLI_ARG(uint64_t, field, cli_parse_u64, __VA_ARGS__)
 
-Cli_ParseStatus cli_internal_parse(Cli_ArgumentSpec *arguments, bool *seen, size_t count, void *context,
-                              int argc, char *argv[], Cli_ParseError *error);
-void cli_internal_print_usage(Cli_ArgumentSpec *arguments, size_t count, FILE *stream, char *program);
-void cli_internal_print_help(Cli_ArgumentSpec *arguments, size_t count, FILE *stream);
-
 #endif
 
 #if defined(CLI_ARGUMENTS) && !defined(CLI_SCHEMA_DEFINED)
@@ -75,97 +61,42 @@ void cli_internal_print_help(Cli_ArgumentSpec *arguments, size_t count, FILE *st
 #error "CLI_ARG must be undefined when generating the schema"
 #else
 
-#define CLI_ARG(type, field, parser, ...) type field;
-typedef struct {
+#define CLI_ARG(type, field, ...) type field;
+struct Cli_ParsedArgs {
     CLI_ARGUMENTS
-} Cli_ParsedArgs;
+};
 #undef CLI_ARG
 
-#define CLI_ARG(type, field, parser, ...) + 1
+#define CLI_ARG(...) + 1
 // +1 for help
 enum { CLI_ARGUMENT_COUNT = 1 CLI_ARGUMENTS };
 #undef CLI_ARG
 
-static inline void cli_internal_build_argument_spec(Cli_ArgumentSpec arguments[CLI_ARGUMENT_COUNT], Cli_ParsedArgs *out) {
-    size_t index = 0;
-
-#define CLI_ARG(type, field, parser, ...) { \
-    struct { type default_value; CLI_PRIVATE_OPTION_FIELDS } settings = {   \
-        .parse = (parser), __VA_ARGS__                                 \
-    };                                                                      \
-                                                                            \
-    if (out != NULL) out->field = settings.default_value;                   \
-                                                                            \
-    arguments[index++] = (Cli_ArgumentSpec) {                               \
-        .short_name = settings.short_name, .long_name = settings.long_name, \
-        .label = settings.label, .description = settings.description,       \
-        .required = settings.required,                                      \
-        .value_mode = settings.value_mode, .parse = settings.parse,     \
-        .destination = out != NULL ? &out->field : NULL                     \
-    };                                                                      \
-}
-
-    CLI_ARGUMENTS
-#undef CLI_ARG
-
-    arguments[index] = (Cli_ArgumentSpec){
-        .short_name = 'h', .long_name = "help", .description = "Show usage",
-        .value_mode = CLI_NO_VALUE, .parse = cli_parse_flag
-    };
-}
-
-static inline Cli_ParseStatus cli_parse(int argc, char *argv[], Cli_ParsedArgs *out, void *context, Cli_ParseError *error) {
-    Cli_ArgumentSpec arguments[CLI_ARGUMENT_COUNT] = {0};
-    bool seen[CLI_ARGUMENT_COUNT] = {0};
-    bool help_requested = false;
-    *error = (Cli_ParseError) {0};
-
-    cli_internal_build_argument_spec(arguments, out);
-    arguments[CLI_ARGUMENT_COUNT - 1].destination = &help_requested;
-
-    Cli_ParseStatus status = cli_internal_parse(arguments, seen, CLI_ARGUMENT_COUNT, context, argc, argv, error);
-
-    if (help_requested)
-        return CLI_HELP;
-
-    if (status != CLI_OK)
-        return status;
-
-    for (size_t i = 0; i < CLI_ARGUMENT_COUNT; ++i) {
-        if (arguments[i].required && !seen[i]) {
-            error->input = arguments[i].long_name ? arguments[i].long_name : arguments[i].label;
-            error->message = "required argument is missing";
-            
-            return CLI_ERROR;
-        }
-    }
-
-    return CLI_OK;
-}
-
-static inline void cli_print_usage(FILE *stream, char *program) {
-    Cli_ArgumentSpec arguments[CLI_ARGUMENT_COUNT];
-    cli_internal_build_argument_spec(arguments, NULL);
-    cli_internal_print_usage(arguments, CLI_ARGUMENT_COUNT, stream, program);
-}
-
-static inline void cli_print_help(FILE *stream) {
-    Cli_ArgumentSpec arguments[CLI_ARGUMENT_COUNT];
-    cli_internal_build_argument_spec(arguments, NULL);
-    cli_internal_print_help(arguments, CLI_ARGUMENT_COUNT, stream);
-}
-
 #endif
 #endif
 
-#if defined(CLI_IMPLEMENTATION) && !defined(CLI_IMPLEMENTATION_INCLUDED)
+#if defined(CLI_IMPLEMENTATION) && defined(CLI_ARGUMENTS) && !defined(CLI_IMPLEMENTATION_INCLUDED)
 #define CLI_IMPLEMENTATION_INCLUDED
 
-#include "vendor/psh_core/psh_core.h"
 #include <ctype.h>
 #include <errno.h>
-#include <inttypes.h>
 #include <math.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define CLI_PRIVATE_OPTION_FIELDS   \
+    char short_name;                \
+    char *long_name;                \
+    char *label;                    \
+    char *description;              \
+    bool required;                  \
+    Cli_ValueMode value_mode;       \
+    Cli_Parser parse;
+
+typedef struct {
+    CLI_PRIVATE_OPTION_FIELDS
+    void *destination;
+} ArgumentSpec;
 
 #define CLI_BOLD(text) "\033[1m" text "\033[0m"
 #define CLI_UNDERLINE(text) "\033[4m" text "\033[0m"
@@ -195,7 +126,7 @@ Cli_ParseStatus cli_parse_i64(char *input, void *destination, void *context, Cli
     if (end == input || *end != '\0' || errno == ERANGE || number < INT64_MIN || number > INT64_MAX)
         return cli_internal_set_error(error, input, "invalid or out-of-range integer");
 
-    *(i64 *)destination = (i64)number;
+    *(int64_t *)destination = (int64_t)number;
     return CLI_OK;
 }
 
@@ -207,7 +138,7 @@ Cli_ParseStatus cli_parse_u64(char *input, void *destination, void *context, Cli
     if (strchr(input, '-') || end == input || *end != '\0' || errno == ERANGE || number > UINT64_MAX)
         return cli_internal_set_error(error, input, "invalid or out-of-range unsigned integer");
 
-    *(u64 *)destination = (u64)number;
+    *(uint64_t *)destination = (uint64_t)number;
     return CLI_OK;
 }
 
@@ -215,20 +146,20 @@ Cli_ParseStatus cli_parse_double(char *input, void *destination, void *context, 
     (void)context;
     char *end;
     errno = 0;
-    f64 number = strtod(input, &end);
+    double number = strtod(input, &end);
     if (end == input || *end != '\0' || errno == ERANGE || !isfinite(number))
         return cli_internal_set_error(error, input, "invalid or out-of-range floating-point number");
 
-    *(f64 *)destination = number;
+    *(double *)destination = number;
     return CLI_OK;
 }
 
-Cli_ParseStatus cli_internal_parse(Cli_ArgumentSpec *arguments, bool *seen, usize count, void *context,
-                                   i32 argc, char *argv[], Cli_ParseError *error) {
+static Cli_ParseStatus cli_internal_parse(ArgumentSpec *arguments, bool *seen, size_t count, void *context,
+                                   int argc, char *argv[], Cli_ParseError *error) {
 #ifndef NDEBUG
     bool optional_positional = false;
-    for (usize i = 0; i < count; ++i) {
-        Cli_ArgumentSpec *argument = &arguments[i];
+    for (size_t i = 0; i < count; ++i) {
+        ArgumentSpec *argument = &arguments[i];
         seen[i] = false;
 
         char *message = NULL;
@@ -247,7 +178,7 @@ Cli_ParseStatus cli_internal_parse(Cli_ArgumentSpec *arguments, bool *seen, usiz
                 message = "invalid long option name";
 
             for (char *p = argument->long_name; *p; ++p)
-                if (*p == '=' || isspace((u8)*p)) message = "invalid long option name";
+                if (*p == '=' || isspace((unsigned char)*p)) message = "invalid long option name";
         }
 
         if (!argument->short_name && !argument->long_name) {
@@ -257,7 +188,7 @@ Cli_ParseStatus cli_internal_parse(Cli_ArgumentSpec *arguments, bool *seen, usiz
             if (!argument->required) optional_positional = true;
         }
 
-        for (usize j = 0; j < i; ++j) {
+        for (size_t j = 0; j < i; ++j) {
             if ((argument->short_name && argument->short_name == arguments[j].short_name)
                 || (argument->long_name && arguments[j].long_name
                     && strcmp(argument->long_name, arguments[j].long_name) == 0))
@@ -270,8 +201,8 @@ Cli_ParseStatus cli_internal_parse(Cli_ArgumentSpec *arguments, bool *seen, usiz
 #endif //NDEBUG
 
     bool options = true;
-    usize positional = 0;
-    for (i32 i = 1; i < argc; ++i) {
+    size_t positional = 0;
+    for (int i = 1; i < argc; ++i) {
         char *token = argv[i];
         if (options && strcmp(token, "--") == 0) {
             options = false;
@@ -281,12 +212,12 @@ Cli_ParseStatus cli_internal_parse(Cli_ArgumentSpec *arguments, bool *seen, usiz
         bool long_option = named && token[1] == '-';
         char *short_option = named && !long_option ? token + 1 : NULL;
         char *equals = long_option ? strchr(token + 2, '=') : NULL;
-        usize name_length = long_option ? (equals ? (usize)(equals - token - 2) : strlen(token + 2)) : 0;
+        size_t name_length = long_option ? (equals ? (size_t)(equals - token - 2) : strlen(token + 2)) : 0;
 
         do {
-            usize match = count;
+            size_t match = count;
             if (named) {
-                for (usize j = 0; j < count; ++j) {
+                for (size_t j = 0; j < count; ++j) {
                     if (long_option) {
                         char *name = arguments[j].long_name;
                         if (name && strlen(name) == name_length && memcmp(name, token + 2, name_length) == 0)
@@ -305,7 +236,7 @@ Cli_ParseStatus cli_internal_parse(Cli_ArgumentSpec *arguments, bool *seen, usiz
                 return cli_internal_set_error(error, token,
                                  named ? "unknown option" : "unexpected positional argument");
 
-            Cli_ArgumentSpec *argument = &arguments[match];
+            ArgumentSpec *argument = &arguments[match];
             if (seen[match])
                 return cli_internal_set_error(error, token, "argument was already supplied");
             char *value = NULL;
@@ -341,17 +272,17 @@ typedef enum {
     ARGUMENT_GROUP_COUNT
 } ArgumentGroup;
 
-static ArgumentGroup cli_internal_argument_group(Cli_ArgumentSpec *argument) {
+static ArgumentGroup cli_internal_argument_group(ArgumentSpec *argument) {
     if (!argument->short_name && !argument->long_name) return ARGUMENT_GROUP_POSITIONAL;
     return argument->value_mode == CLI_NO_VALUE ? ARGUMENT_GROUP_FLAG : ARGUMENT_GROUP_OPTION;
 }
 
-void cli_internal_print_usage(Cli_ArgumentSpec *arguments, usize count, FILE *stream, char *program) {
+static void cli_internal_print_usage(ArgumentSpec *arguments, size_t count, FILE *stream, char *program) {
     fprintf(stream, "Usage: %s", program);
 
     bool short_flags = false;
-    for (usize i = 0; i < count; ++i) {
-        Cli_ArgumentSpec *argument = &arguments[i];
+    for (size_t i = 0; i < count; ++i) {
+        ArgumentSpec *argument = &arguments[i];
         if (argument->value_mode != CLI_NO_VALUE || !argument->short_name || argument->required) continue;
         if (!short_flags) fputs(" [-", stream);
         fputc(argument->short_name, stream);
@@ -360,8 +291,8 @@ void cli_internal_print_usage(Cli_ArgumentSpec *arguments, usize count, FILE *st
     if (short_flags) fputc(']', stream);
 
     for (ArgumentGroup group = ARGUMENT_GROUP_FLAG; group < ARGUMENT_GROUP_COUNT; ++group) {
-        for (usize i = 0; i < count; ++i) {
-            Cli_ArgumentSpec *argument = &arguments[i];
+        for (size_t i = 0; i < count; ++i) {
+            ArgumentSpec *argument = &arguments[i];
 
             if (cli_internal_argument_group(argument) != group) continue;
             if (group == ARGUMENT_GROUP_FLAG && argument->short_name && !argument->required) continue;
@@ -385,12 +316,12 @@ void cli_internal_print_usage(Cli_ArgumentSpec *arguments, usize count, FILE *st
     fputc('\n', stream);
 }
 
-void cli_internal_print_help(Cli_ArgumentSpec *arguments, usize count, FILE *stream) {
+static void cli_internal_print_help(ArgumentSpec *arguments, size_t count, FILE *stream) {
     fputs("Arguments:\n", stream);
 
     for (ArgumentGroup group = ARGUMENT_GROUP_FLAG; group < ARGUMENT_GROUP_COUNT; ++group) {
-        for (usize i = 0; i < count; ++i) {
-            Cli_ArgumentSpec *argument = &arguments[i];
+        for (size_t i = 0; i < count; ++i) {
+            ArgumentSpec *argument = &arguments[i];
             if (cli_internal_argument_group(argument) != group) continue;
 
             char *label = argument->label ? argument->label : "value";
@@ -418,6 +349,75 @@ void cli_internal_print_help(Cli_ArgumentSpec *arguments, usize count, FILE *str
             fputc('\n', stream);
         }
     }
+}
+
+static void cli_internal_build_argument_spec(ArgumentSpec arguments[CLI_ARGUMENT_COUNT], Cli_ParsedArgs *out) {
+    size_t index = 0;
+
+#define CLI_ARG(type, field, parser, ...) { \
+    struct { type default_value; CLI_PRIVATE_OPTION_FIELDS } settings = {   \
+        .parse = (parser), __VA_ARGS__                                 \
+    };                                                                      \
+                                                                            \
+    if (out != NULL) out->field = settings.default_value;                   \
+                                                                            \
+    arguments[index++] = (ArgumentSpec) {                               \
+        .short_name = settings.short_name, .long_name = settings.long_name, \
+        .label = settings.label, .description = settings.description,       \
+        .required = settings.required,                                      \
+        .value_mode = settings.value_mode, .parse = settings.parse,     \
+        .destination = out != NULL ? &out->field : NULL                     \
+    };                                                                      \
+}
+
+    CLI_ARGUMENTS
+#undef CLI_ARG
+
+    arguments[index] = (ArgumentSpec){
+        .short_name = 'h', .long_name = "help", .description = "Show usage",
+        .value_mode = CLI_NO_VALUE, .parse = cli_parse_flag
+    };
+}
+
+Cli_ParseStatus cli_parse(int argc, char *argv[], Cli_ParsedArgs *out, void *context, Cli_ParseError *error) {
+    ArgumentSpec arguments[CLI_ARGUMENT_COUNT] = {0};
+    bool seen[CLI_ARGUMENT_COUNT] = {0};
+    bool help_requested = false;
+    *error = (Cli_ParseError) {0};
+
+    cli_internal_build_argument_spec(arguments, out);
+    arguments[CLI_ARGUMENT_COUNT - 1].destination = &help_requested;
+
+    Cli_ParseStatus status = cli_internal_parse(arguments, seen, CLI_ARGUMENT_COUNT, context, argc, argv, error);
+
+    if (help_requested)
+        return CLI_HELP;
+
+    if (status != CLI_OK)
+        return status;
+
+    for (size_t i = 0; i < CLI_ARGUMENT_COUNT; ++i) {
+        if (arguments[i].required && !seen[i]) {
+            error->input = arguments[i].long_name ? arguments[i].long_name : arguments[i].label;
+            error->message = "required argument is missing";
+            
+            return CLI_ERROR;
+        }
+    }
+
+    return CLI_OK;
+}
+
+void cli_print_usage(FILE *stream, char *program) {
+    ArgumentSpec arguments[CLI_ARGUMENT_COUNT];
+    cli_internal_build_argument_spec(arguments, NULL);
+    cli_internal_print_usage(arguments, CLI_ARGUMENT_COUNT, stream, program);
+}
+
+void cli_print_help(FILE *stream) {
+    ArgumentSpec arguments[CLI_ARGUMENT_COUNT];
+    cli_internal_build_argument_spec(arguments, NULL);
+    cli_internal_print_help(arguments, CLI_ARGUMENT_COUNT, stream);
 }
 
 #endif
