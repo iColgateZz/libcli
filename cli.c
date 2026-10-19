@@ -39,7 +39,7 @@ Cli_ParseStatus cli_parse_u64(char *input, void *destination, void *context, Cli
     char *end;
     errno = 0;
     uintmax_t number = strtoumax(input, &end, 10);
-    if (strchr(input, '-') != NULL || end == input || *end != '\0' || errno == ERANGE || number > UINT64_MAX)
+    if (strchr(input, '-') || end == input || *end != '\0' || errno == ERANGE || number > UINT64_MAX)
         return set_error(error, input, "invalid or out-of-range unsigned integer");
 
     *(u64 *)destination = (u64)number;
@@ -86,6 +86,7 @@ Cli_ParseStatus cli_internal_parse(Cli_ArgumentSpec *arguments, bool *seen, usiz
         }
 
         if (!argument->short_name && !argument->long_name) {
+            if (!argument->label) message = "positional argument must have a label";
             if (argument->value_mode == CLI_NO_VALUE) message = "positional argument must take a value";
             if (argument->required && optional_positional) message = "required positional argument follows an optional one";
             if (!argument->required) optional_positional = true;
@@ -99,8 +100,7 @@ Cli_ParseStatus cli_internal_parse(Cli_ArgumentSpec *arguments, bool *seen, usiz
         }
 
         if (message != NULL)
-            return set_error(error, argument->long_name ? argument->long_name : argument->label,
-                             message);
+            return set_error(error, argument->long_name ? argument->long_name : argument->label, message);
     }
 #endif //NDEBUG
 
@@ -169,42 +169,79 @@ Cli_ParseStatus cli_internal_parse(Cli_ArgumentSpec *arguments, bool *seen, usiz
     return CLI_OK;
 }
 
-void cli_internal_print_help(Cli_ArgumentSpec *arguments, usize count, FILE *stream, char *program) {
-    fprintf(stream, "Usage: %s", program);
+typedef enum {
+    ARGUMENT_GROUP_FLAG,
+    ARGUMENT_GROUP_OPTION,
+    ARGUMENT_GROUP_POSITIONAL,
+    ARGUMENT_GROUP_COUNT
+} ArgumentGroup;
 
+static ArgumentGroup argument_group(Cli_ArgumentSpec *argument) {
+    if (!argument->short_name && !argument->long_name) return ARGUMENT_GROUP_POSITIONAL;
+    return argument->value_mode == CLI_NO_VALUE ? ARGUMENT_GROUP_FLAG : ARGUMENT_GROUP_OPTION;
+}
+
+void cli_internal_print_usage(Cli_ArgumentSpec *arguments, usize count, FILE *stream, char *program) {
+    fprintf(stream, "usage: %s", program);
+
+    bool short_flags = false;
     for (usize i = 0; i < count; ++i) {
         Cli_ArgumentSpec *argument = &arguments[i];
+        if (argument->value_mode != CLI_NO_VALUE || !argument->short_name || argument->required) continue;
+        if (!short_flags) fputs(" [-", stream);
+        fputc(argument->short_name, stream);
+        short_flags = true;
+    }
+    if (short_flags) fputc(']', stream);
 
-        fputc(' ', stream);
-        if (!argument->required) fputc('[', stream);
+    for (ArgumentGroup group = ARGUMENT_GROUP_FLAG; group < ARGUMENT_GROUP_COUNT; ++group) {
+        for (usize i = 0; i < count; ++i) {
+            Cli_ArgumentSpec *argument = &arguments[i];
 
-        if (argument->long_name) fprintf(stream, "--%s", argument->long_name);
-        else if (argument->short_name) fprintf(stream, "-%c", argument->short_name);
+            if (argument_group(argument) != group) continue;
+            if (group == ARGUMENT_GROUP_FLAG && argument->short_name && !argument->required) continue;
 
-        if (argument->value_mode == CLI_VALUE_REQUIRED) {
-            char *label = argument->label ? argument->label : "VALUE";
-            fprintf(stream, " <%s>", label);
+            fputc(' ', stream);
+            if (!argument->required) fputc('[', stream);
+
+            if (argument->short_name) fprintf(stream, "-%c", argument->short_name);
+            else if (argument->long_name) fprintf(stream, "--%s", argument->long_name);
+
+            if (argument->value_mode == CLI_VALUE_REQUIRED) {
+                char *label = argument->label ? argument->label : "VALUE";
+                if (group != ARGUMENT_GROUP_POSITIONAL) fputc(' ', stream);
+                fprintf(stream, "%s", label);
+            }
+
+            if (!argument->required) fputc(']', stream);
         }
-
-        if (!argument->required) fputc(']', stream);
     }
 
-    fputs("\n\nArguments:\n", stream);
-    for (usize i = 0; i < count; ++i) {
-        Cli_ArgumentSpec *argument = &arguments[i];
+    fputc('\n', stream);
+}
 
-        fputs("  ", stream);
-        if (argument->short_name) fprintf(stream, "-%c", argument->short_name);
-        if (argument->long_name) fprintf(stream, "%s--%s", argument->short_name ? ", " : "", argument->long_name);
+void cli_internal_print_help(Cli_ArgumentSpec *arguments, usize count, FILE *stream, char *program) {
+    fputs("arguments:\n", stream);
 
-        if (argument->value_mode == CLI_VALUE_REQUIRED) {
-            char *label = argument->label ? argument->label : "VALUE";
-            fprintf(stream, " <%s>", label);
+    for (ArgumentGroup group = ARGUMENT_GROUP_FLAG; group < ARGUMENT_GROUP_COUNT; ++group) {
+        for (usize i = 0; i < count; ++i) {
+            Cli_ArgumentSpec *argument = &arguments[i];
+            if (argument_group(argument) != group) continue;
+
+            fputs("  ", stream);
+            if (argument->short_name) fprintf(stream, "-%c", argument->short_name);
+            if (argument->long_name) fprintf(stream, "%s--%s", argument->short_name ? ", " : "", argument->long_name);
+
+            if (argument->value_mode == CLI_VALUE_REQUIRED) {
+                char *label = argument->label ? argument->label : "value";
+                if (group != ARGUMENT_GROUP_POSITIONAL) fputc(' ', stream);
+                fprintf(stream, "%s", label);
+            }
+
+            if (argument->required) fputs(" (required)", stream);
+            fputc('\n', stream);
+
+            if (argument->description != NULL) fprintf(stream, "      %s\n", argument->description);
         }
-
-        if (argument->required) fputs(" (required)", stream);
-        fputc('\n', stream);
-
-        if (argument->description != NULL) fprintf(stream, "      %s\n", argument->description);
     }
 }

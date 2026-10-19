@@ -31,20 +31,14 @@ static Cli_ParseStatus parse_port(char *input, void *destination, void *context,
 #define CLI_ARGUMENTS \
     CLI_ARG_FLAG(verbose, .short_name = 'v', .long_name = "verbose", .description = "Enable verbose output") \
     CLI_ARG_U64(count, .default_value = 4, .short_name = 'c', .long_name = "count", \
-        .label = "NUM", .description = "Request count") \
+        .label = "num", .description = "Request count") \
     CLI_ARG(Example_Port, port, parse_port, .default_value = {80}, \
-      .short_name = 'p', .long_name = "port", .label = "PORT", .description = "Port") \
-    CLI_ARG_TEXT(host, .required = true, .label = "HOST", .description = "Target host") \
-    CLI_ARG_TEXT(output, .default_value = "console", .label = "OUTPUT", .description = "Output destination")
+      .short_name = 'p', .long_name = "port", .label = "port", .description = "Port") \
+    CLI_ARG_TEXT(host, .required = true, .label = "host", .description = "Target host") \
+    CLI_ARG_TEXT(output, .default_value = "console", .label = "out", .description = "Output destination")
 
 #include "cli.h"
 
-static int report_error(Cli_ParseError error) {
-    fprintf(stderr, "argument error: %s\n", error.message ? error.message : "invalid arg");
-    if (error.input)
-        fprintf(stderr, "input: %s\n", error.input);
-    return -1;
-}
 
 int main(int argc, char **argv) {
     Cli_ParsedArgs args;
@@ -53,12 +47,19 @@ int main(int argc, char **argv) {
     Cli_ParseStatus status = cli_parse(argc, argv, &args, &context, &error);
 
     if (status == CLI_HELP) {
-        cli_print_help(stdout, argv[0]);
+        cli_print_usage(stderr, argv[0]);
+        cli_print_help(stderr, argv[0]);
         return 0;
     }
 
-    if (status != CLI_OK)
-        return report_error(error);
+    if (status != CLI_OK) {
+        fprintf(stderr, "argument parsing error");
+        if (error.input) fprintf(stderr, " at '%s'", error.input);
+        fprintf(stderr, ": %s\n", error.message);
+
+        cli_print_usage(stderr, argv[0]);
+        return -1;
+    }
 
     if (args.count == 0) {
         fprintf(stderr, "count must be positive\n");
@@ -69,5 +70,5 @@ int main(int argc, char **argv) {
         fprintf(stderr, "count=%lld, port=%lld\n", args.count, args.port.number);
 
     printf("host: %s\noutput: %s\n", args.host, args.output);
-    return ferror(stdout) ? -1 : 0;
+    return 0;
 }

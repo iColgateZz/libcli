@@ -12,7 +12,6 @@ typedef enum {
     CLI_ERROR
 } Cli_ParseStatus;
 
-typedef struct Cli_ArgumentSpec Cli_ArgumentSpec;
 typedef struct Cli_ParseError Cli_ParseError;
 
 typedef Cli_ParseStatus (*Cli_Parser)(char *input, void *destination, void *context, Cli_ParseError *error);
@@ -31,10 +30,10 @@ typedef enum {
     Cli_ValueMode value_mode;       \
     Cli_Parser parse;
 
-struct Cli_ArgumentSpec {
+typedef struct {
     CLI_PRIVATE_OPTION_FIELDS
     void *destination;
-};
+} Cli_ArgumentSpec;
 
 struct Cli_ParseError {
     char *input;
@@ -64,6 +63,7 @@ Cli_ParseStatus cli_parse_double(char *input, void *destination, void *context, 
 
 Cli_ParseStatus cli_internal_parse(Cli_ArgumentSpec *arguments, bool *seen, size_t count, void *context,
                               int argc, char *argv[], Cli_ParseError *error);
+void cli_internal_print_usage(Cli_ArgumentSpec *arguments, size_t count, FILE *stream, char *program);
 void cli_internal_print_help(Cli_ArgumentSpec *arguments, size_t count, FILE *stream, char *program);
 
 #endif
@@ -141,6 +141,12 @@ static inline Cli_ParseStatus cli_parse(int argc, char *argv[], Cli_ParsedArgs *
     }
 
     return CLI_OK;
+}
+
+static inline void cli_print_usage(FILE *stream, char *program) {
+    Cli_ArgumentSpec arguments[CLI_ARGUMENT_COUNT];
+    build_argument_spec(arguments, NULL);
+    cli_internal_print_usage(arguments, CLI_ARGUMENT_COUNT, stream, program);
 }
 
 static inline void cli_print_help(FILE *stream, char *program) {
