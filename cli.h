@@ -80,6 +80,7 @@ enum { CLI_ARGUMENT_COUNT = 1 CLI_ARGUMENTS };
 
 #include <ctype.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -189,13 +190,12 @@ Cli_ParseStatus cli_parse(int argc, char *argv[], Cli_ParsedArgs *out, void *con
     return CLI_OK;
 }
 
-static Cli_ParseStatus cli_internal_parse(ArgumentSpec arguments[CLI_ARGUMENT_COUNT], bool seen[CLI_ARGUMENT_COUNT],
-                                          void *context, int argc, char *argv[], Cli_ParseError *error) {
 #ifndef NDEBUG
+static Cli_ParseStatus 
+cli_internal_validate_argument_spec(ArgumentSpec arguments[CLI_ARGUMENT_COUNT], Cli_ParseError *error) {
     bool optional_positional = false;
     for (size_t i = 0; i < CLI_ARGUMENT_COUNT; ++i) {
         ArgumentSpec *argument = &arguments[i];
-        seen[i] = false;
 
         char *message = NULL;
         if (!argument->parse) message = "argument needs a parser";
@@ -233,7 +233,18 @@ static Cli_ParseStatus cli_internal_parse(ArgumentSpec arguments[CLI_ARGUMENT_CO
         if (message != NULL)
             return cli_internal_set_error(error, argument->long_name ? argument->long_name : argument->label, message);
     }
+    return CLI_OK;
+}
 #endif //NDEBUG
+
+static Cli_ParseStatus cli_internal_parse(ArgumentSpec arguments[CLI_ARGUMENT_COUNT], bool seen[CLI_ARGUMENT_COUNT],
+                                          void *context, int argc, char *argv[], Cli_ParseError *error) {
+#ifndef NDEBUG
+    Cli_ParseStatus status = cli_internal_validate_argument_spec(arguments, error);
+    if (status != CLI_OK) return status;
+#endif
+
+    for (size_t i = 0; i < CLI_ARGUMENT_COUNT; ++i) seen[i] = false;
 
     bool options = true;
     size_t positional = 0;
