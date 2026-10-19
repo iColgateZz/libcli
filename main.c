@@ -35,8 +35,8 @@ static Cli_ParseStatus parse_port(char *input, void *destination, void *context,
         .label = "num", .description = "Request count") \
     CLI_ARG(Example_Port, port, parse_port, .default_value = {80}, \
       .short_name = 'p', .long_name = "port", .label = "port", .description = "Port") \
-    CLI_ARG_TEXT(host, .required = true, .label = "host", .description = "Target host") \
-    CLI_ARG_TEXT(output, .default_value = "console", .label = "out", .description = "Output destination")
+    CLI_ARG_POSITIONAL(char *, host, cli_parse_text, .required = true, .label = "host", .description = "Target host") \
+    CLI_ARG_POSITIONAL(char *, output, cli_parse_text, .default_value = "console", .label = "out", .description = "Output destination")
 
 #include "cli.h"
 #undef CLI_ARGUMENTS
