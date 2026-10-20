@@ -247,6 +247,7 @@ static Cli_ParseStatus cli__parse(ArgumentSpec arguments[CLI_ARGUMENT_COUNT], bo
                     match = positional;
                     // Skip over "regular" positional args, stay on list
                     if (arguments[positional].kind == ARGUMENT_POSITIONAL) ++positional;
+                    else allow_options = false;
                 }
             }
             else if (long_option) {
