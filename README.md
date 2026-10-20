@@ -1,8 +1,6 @@
 # cli.h
 
-A single-header C99 argument parser. An X-macro schema declares argument fields,
-defaults, parsing callbacks, and help text together, generating a `Cli_ParsedArgs`
-structure. It has no third-party dependencies and performs no heap allocations.
+A single-header C99 argument parser.
 
 ## Example
 
@@ -58,7 +56,7 @@ parser functions used by that implementation must be declared before expansion.
 
 - Short flags can be grouped: `-abc`. Values may follow a short option directly
   or separately: `-c3`, `-c 3`. Long options accept `--count=3` and `--count 3`.
-- `--` ends option recognition; a lone `-` is positional.
+- `--` ends option recognition.
 - Options can appear among scalar positional arguments.
 - **Once a trailing positional list receives its first token, all remaining
   tokens belong to it**, including `-h`, `--help`, and `--`. Before the list
@@ -89,14 +87,6 @@ The parser neither prints nor exits. Call `cli_print_usage(stream, program)` and
 `cli_print_help(stream)` explicitly. Help uses ANSI bold and underline sequences.
 Default values are not automatically printed.
 
-## Development
-
-Generated binaries and object files go in ignored `build/` directories. The
-timeout Makefile supports `all`, `format`, and `clean`.
-The example's `examples/timeout/.clang-format` defines its C formatting style:
-
-```sh
-make -C examples/timeout format
-```
+## License
 
 The library and example are MIT licensed; see [LICENSE](LICENSE).
