@@ -46,11 +46,62 @@ arguments accept `.label`. All kinds accept `.description`, `.required`, and a
 typed `.default_value` C initializer. Defaults do not satisfy required presence.
 Flags default to false; other omitted defaults are zero-initialized.
 
-The library generates one schema per program. To share `Cli_ParsedArgs` across
+The library generates one root schema per program. To share `Cli_ParsedArgs` across
 source files, put the schema and its type dependencies in an application header
 with an include guard. Include that header wherever its fields are needed;
-define `CLI_IMPLEMENTATION` before including it in exactly one C file. Custom
-parser functions used by that implementation must be declared before expansion.
+define `CLI_IMPLEMENTATION` before including it in exactly one C file. That file
+must include the schema as well as `cli.h`; defining `CLI_IMPLEMENTATION` with no
+schema does not emit an implementation. Private metadata and helpers are emitted
+only in that implementation file. Custom parser functions used by that
+implementation must be declared before expansion.
+
+## Subcommands
+
+Define each command's arguments just like the root arguments, then list commands:
+
+```c
+#define GREET_ARGUMENTS \
+    CLI_ARG_U64(count, .short_name = 'c', .default_value = 1, .label = "NUM") \
+    CLI_ARG_POSITIONAL(char *, name, cli_parse_text, .required = true, .label = "NAME")
+
+#define CLI_ARGUMENTS \
+    CLI_ARG_FLAG(verbose, .short_name = 'v', .long_name = "verbose")
+
+#define CLI_COMMANDS \
+    CLI_COMMAND(greet, "greet", "Print a greeting", GREET_ARGUMENTS)
+#include "cli.h"
+```
+
+This generates `args.command` (`cli_command_none` or `cli_command_greet`) and
+`args.commands.greet.count` / `args.commands.greet.name`. Command fields share a
+union; read only the selected member. Each child has a public
+`Cli_CommandArgs_<field>` type, and the selector has type `Cli_Command`.
+Only the selected command's defaults are initialized during parsing.
+The field identifier and command-line name may differ. With commands enabled,
+root fields `command` and `commands` and the command identifier `none` are reserved.
+Generated structs also reserve the field `cli_reserved` for empty schemas.
+
+A command is required when `CLI_COMMANDS` contains entries. Root options go before
+the command name, and command options go after it. Each scope recognizes its own
+`--` separator. Root schemas with commands cannot also declare positional
+arguments; put those in the command schemas. This version supports one command
+level and one root schema per program.
+
+Root help bypasses command selection. Command help bypasses required checks in
+both scopes. Pass the parsed result to usage/help to select the relevant command;
+pass `NULL` for root usage/help. The selector is also set on command errors, so the
+same calls work when reporting failures. Missing root requirements select root
+usage instead.
+
+See [examples/commands/main.c](examples/commands/main.c) for the complete greeting
+and addition example:
+
+```sh
+make -C examples/commands
+examples/commands/build/commands -v greet -c2 Pavel
+examples/commands/build/commands add 1.5 2
+examples/commands/build/commands greet --help
+```
 
 ## Parsing behavior
 
@@ -82,11 +133,13 @@ Each parse initializes fields from their defaults. Text values borrow `argv`
 strings without modifying them. List storage belongs to the application.
 Results may be partially updated on failure and should then be discarded.
 Schema checks are enabled in debug builds and omitted with `NDEBUG`.
+The library allocates no heap memory. Parsing uses C99 variable-length arrays on
+the stack sized by the schema, with one frame for each active command scope.
 
-The parser neither prints nor exits. Call `cli_print_usage(stream, program)` and
-`cli_print_help(stream)` explicitly. Help uses ANSI bold and underline sequences.
-Default values are not automatically printed.
+The parser neither prints nor exits. Call `cli_print_usage(stream, program, &args)`
+and `cli_print_help(stream, &args)` explicitly. Help uses ANSI bold and underline
+sequences. Default values are not automatically printed.
 
 ## License
 
-The library and example are MIT licensed; see [LICENSE](LICENSE).
+The library and examples are MIT licensed; see [LICENSE](LICENSE).

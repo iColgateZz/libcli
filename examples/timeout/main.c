@@ -71,9 +71,9 @@ int main(int argc, char *argv[]) {
     Cli_ParseStatus status = cli_parse(argc, argv, &args, NULL, &error);
 
     if (status == CLI_HELP) {
-        cli_print_usage(stdout, argv[0]);
+        cli_print_usage(stdout, argv[0], &args);
         fputc('\n', stdout);
-        cli_print_help(stdout);
+        cli_print_help(stdout, &args);
         return 0;
     }
 
@@ -81,7 +81,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "timeout: %s", error.message);
         if (error.input) fprintf(stderr, ": '%s'", error.input);
         fputc('\n', stderr);
-        cli_print_usage(stderr, argv[0]);
+        cli_print_usage(stderr, argv[0], &args);
         return -1;
     }
 
