@@ -64,7 +64,7 @@ Cli_ParseStatus cli_parse_double(char *input, void *destination, void *context, 
 
 #endif //CLI_INCLUDE
 
-//Why?
+
 #if defined(CLI_COMMANDS) && !defined(CLI_ARGUMENTS)
 #define CLI_ARGUMENTS
 #endif
@@ -76,7 +76,7 @@ Cli_ParseStatus cli_parse_double(char *input, void *destination, void *context, 
 
 #ifdef CLI_COMMANDS
 #define CLI_PRIVATE_COMMAND(field, name, description, arguments) \
-    typedef struct { unsigned char cli_reserved; arguments } Cli_CommandArgs_##field;
+    typedef struct { arguments } Cli_CommandArgs_##field;
 CLI_COMMANDS
 #undef CLI_PRIVATE_COMMAND
 
@@ -88,14 +88,12 @@ typedef enum {
 #undef CLI_PRIVATE_COMMAND
 #endif
 
-// Why?
+
 struct Cli_ParsedArgs {
-    unsigned char cli_reserved;
     CLI_ARGUMENTS
 #ifdef CLI_COMMANDS
     Cli_Command command;
     union {
-        unsigned char cli_reserved;
 #define CLI_PRIVATE_COMMAND(field, ...) Cli_CommandArgs_##field field;
         CLI_COMMANDS
 #undef CLI_PRIVATE_COMMAND

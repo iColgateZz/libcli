@@ -85,7 +85,14 @@ union; read only the selected member. Each child has a public
 Only the selected command's defaults are initialized during parsing.
 The field identifier and command-line name may differ. With commands enabled,
 root fields `command` and `commands` and the command identifier `none` are reserved.
-Generated structs also reserve the field `cli_reserved` for empty schemas.
+Help is reported through `CLI_HELP`; no help flag or placeholder field is added
+to the generated results. The command selector determines which help to print.
+
+Omit `CLI_COMMANDS` when there are no subcommands; no command enum or union is
+then generated. Defining an empty `CLI_COMMANDS` produces an empty union.
+Schemas without arguments produce empty result structs, including argumentless
+subcommands. Empty structs and unions are invalid in standard C99; strict builds
+reject them through the compiler's normal diagnostics.
 
 A command is required when `CLI_COMMANDS` contains entries. Root options go before
 the command name, and command options go after it. Each scope recognizes its own
