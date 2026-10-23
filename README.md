@@ -46,6 +46,12 @@ arguments accept `.label`. All kinds accept `.description`, `.required`, and a
 typed `.default_value` C initializer. Defaults do not satisfy required presence.
 Flags default to false; other omitted defaults are zero-initialized.
 
+Default expressions are evaluated at runtime during parsing. Printing usage or
+help also evaluates the displayed schema's defaults, without updating the parsed
+result. Calling both output functions evaluates those expressions twice more.
+Function calls are allowed in defaults, but prefer constants or expressions
+without side effects; avoid allocations or work that must happen only once.
+
 The library generates one root schema per program. To share `Cli_ParsedArgs` across
 source files, put the schema and its type dependencies in an application header
 with an include guard. Include that header wherever its fields are needed;
