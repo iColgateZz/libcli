@@ -4,3 +4,4 @@ build/
 *.dSYM/
 /app
 .DS_Store
+tests/
