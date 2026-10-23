@@ -80,9 +80,9 @@ Cli_ParseStatus cli_parse_double(char *input, void *destination, void *context, 
 CLI_COMMANDS
 #undef CLI_PRIVATE_COMMAND
 
-#define CLI_PRIVATE_COMMAND(field, ...) cli_command_##field,
+#define CLI_PRIVATE_COMMAND(field, ...) cli_cmd_##field,
 typedef enum {
-    cli_command_none,
+    cli_cmd_none,
     CLI_COMMANDS
 } Cli_Command;
 #undef CLI_PRIVATE_COMMAND
@@ -238,7 +238,10 @@ static bool cli__is_positional(Cli__ArgumentSpec *argument) {
 
 #define CLI_PRIVATE_ARG(category, type, field, parser, ...) { \
     struct { type default_value; CLI_PRIVATE_##category##_FIELDS } argument_settings = {__VA_ARGS__}; \
-    if (out != NULL) out->field = argument_settings.default_value; \
+    \
+    if (out != NULL) \
+        out->field = argument_settings.default_value; \
+    \
     arguments[index++] = (Cli__ArgumentSpec){ \
         .kind = CLI_ARGUMENT_##category, .parse = (parser), \
         CLI_PRIVATE_##category##_SETTINGS(argument_settings), \
@@ -256,7 +259,9 @@ static void cli__build_root(Cli__ArgumentSpec *arguments, Cli_ParsedArgs *out) {
 #define CLI_PRIVATE_COMMAND(field, name, description, schema) \
     static void cli__build_command_##field(Cli__ArgumentSpec *arguments, Cli_ParsedArgs *parent) { \
         Cli_CommandArgs_##field *out = parent ? &parent->cmd.field : NULL; \
-        if (parent) parent->cmd_type = cli_command_##field; \
+        if (parent) \
+            parent->cmd_type = cli_cmd_##field; \
+        \
         size_t index = 0; \
         schema \
         (void)arguments; (void)out; (void)index; \
@@ -271,8 +276,9 @@ CLI_COMMANDS
 #define CLI_PRIVATE_COMMAND(field, command_name, text, arguments) \
     { .name = command_name, .description = text, \
       .schema = {.argument_count = 1 arguments, .build = cli__build_command_##field} },
+
 static Cli__Command cli__commands[] = {
-    {0},
+    {0}, // cli_cmd_none
     CLI_COMMANDS
 };
 #undef CLI_PRIVATE_COMMAND
@@ -325,6 +331,7 @@ static Cli_ParseStatus cli__parse_tokens(size_t count, Cli__ArgumentSpec argumen
                     *command_position = i;
                     return CLI_OK;
                 }
+
                 while (positional < count && !cli__is_positional(&arguments[positional]))
                     ++positional;
 
@@ -479,7 +486,7 @@ static Cli_ParseStatus cli__validate_schema(Cli__Schema *schema, Cli__ArgumentSp
 
 static void cli__build_schema(Cli__Schema *schema, Cli__ArgumentSpec arguments[], Cli_ParsedArgs *out) {
     schema->build(arguments, out);
-    arguments[schema->argument_count - 1] = (Cli__ArgumentSpec){
+    arguments[schema->argument_count - 1] = (Cli__ArgumentSpec) {
         .kind = CLI_ARGUMENT_FLAG, .short_name = 'h', .long_name = "help", .description = "Show usage",
         .parse = cli_parse_flag
     };
@@ -488,13 +495,14 @@ static void cli__build_schema(Cli__Schema *schema, Cli__ArgumentSpec arguments[]
 static Cli_ParseStatus cli__parse_schema(Cli__Schema *schema, int argc, char *argv[], Cli_ParsedArgs *out,
                                    void *context, size_t *selected, Cli_ParseError *error) {
     size_t count = schema->argument_count;
-    Cli__ArgumentSpec arguments[count];
-    bool seen[count];
-    memset(seen, 0, sizeof(seen));
+    Cli__ArgumentSpec arguments[count] = {0};
+    bool seen[count] = {0};
     bool help_requested = false;
     *selected = 0;
+
     cli__build_schema(schema, arguments, out);
     arguments[count - 1].destination = &help_requested;
+
 #ifndef CLI_NDEBUG
     Cli_ParseStatus valid = cli__validate_schema(schema, arguments, error);
     if (valid != CLI_OK) return valid;
@@ -511,7 +519,10 @@ static Cli_ParseStatus cli__parse_schema(Cli__Schema *schema, int argc, char *ar
         size_t command = 1;
         while (command < schema->command_count &&
                strcmp(argv[command_position], schema->commands[command].name) != 0)
+        {
             ++command;
+        }
+
         if (command == schema->command_count)
             return cli__set_error(error, argv[command_position], "unknown command");
 
@@ -519,6 +530,7 @@ static Cli_ParseStatus cli__parse_schema(Cli__Schema *schema, int argc, char *ar
         size_t child_selected;
         status = cli__parse_schema(&schema->commands[command].schema, argc - command_position,
                               argv + command_position, out, context, &child_selected, error);
+
         if (status != CLI_OK) return status;
     }
 
@@ -545,7 +557,7 @@ Cli_ParseStatus cli_parse(int argc, char *argv[], Cli_ParsedArgs *out, void *con
 
 static Cli__Schema *cli__select_schema(Cli_ParsedArgs *args) {
 #ifdef CLI_COMMANDS
-    if (args && args->cmd_type > cli_command_none && (size_t)args->cmd_type < cli__root_schema.command_count)
+    if (args && args->cmd_type > cli_cmd_none && (size_t)args->cmd_type < cli__root_schema.command_count)
         return &cli__commands[args->cmd_type].schema;
 #else
     (void)args;

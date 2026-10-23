@@ -41,13 +41,13 @@ int main(int argc, char *argv[]) {
     }
 
     switch (args.cmd_type) {
-        case cli_command_greet:
+        case cli_cmd_greet:
             if (args.verbose) fprintf(stderr, "command: greet\n");
             for (uint64_t i = 0; i < args.cmd.greet.count; ++i)
                 printf("Hello, %s!\n", args.cmd.greet.name);
             break;
 
-        case cli_command_add:
+        case cli_cmd_add:
             if (args.verbose) fprintf(stderr, "command: add\n");
             printf("%g\n", args.cmd.add.left + args.cmd.add.right);
             break;

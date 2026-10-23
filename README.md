@@ -78,7 +78,7 @@ Define each command's arguments just like the root arguments, then list commands
 #include "cli.h"
 ```
 
-This generates `args.cmd_type` (`cli_command_none` or `cli_command_greet`) and
+This generates `args.cmd_type` (`cli_cmd_none` or `cli_cmd_greet`) and
 `args.cmd.greet.count` / `args.cmd.greet.name`. Command fields share a
 union; read only the selected member. Each child has a public
 `Cli_CommandArgs_<field>` type, and the selector has type `Cli_Command`.
