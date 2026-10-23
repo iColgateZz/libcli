@@ -237,11 +237,11 @@ static bool cli__is_positional(Cli__ArgumentSpec *argument) {
 #define CLI_PRIVATE_POSITIONAL_LIST_SETTINGS(settings) CLI_PRIVATE_POSITIONAL_SETTINGS(settings)
 
 #define CLI_PRIVATE_ARG(category, type, field, parser, ...) { \
-    struct { type default_value; CLI_PRIVATE_##category##_FIELDS } settings = {__VA_ARGS__}; \
-    if (out != NULL) out->field = settings.default_value; \
+    struct { type default_value; CLI_PRIVATE_##category##_FIELDS } argument_settings = {__VA_ARGS__}; \
+    if (out != NULL) out->field = argument_settings.default_value; \
     arguments[index++] = (Cli__ArgumentSpec){ \
         .kind = CLI_ARGUMENT_##category, .parse = (parser), \
-        CLI_PRIVATE_##category##_SETTINGS(settings), \
+        CLI_PRIVATE_##category##_SETTINGS(argument_settings), \
         .destination = out != NULL ? &out->field : NULL \
     }; \
 }
@@ -407,7 +407,7 @@ static Cli_ParseStatus cli__parse_tokens(size_t count, Cli__ArgumentSpec argumen
     return CLI_OK;
 }
 
-#ifndef NDEBUG
+#ifndef CLI_NDEBUG
 static Cli_ParseStatus cli__validate_schema(Cli__Schema *schema, Cli__ArgumentSpec arguments[], Cli_ParseError *error) {
     size_t count = schema->argument_count;
     bool optional_positional = false;
@@ -475,7 +475,7 @@ static Cli_ParseStatus cli__validate_schema(Cli__Schema *schema, Cli__ArgumentSp
 
     return CLI_OK;
 }
-#endif //NDEBUG
+#endif //CLI_NDEBUG
 
 static void cli__build_schema(Cli__Schema *schema, Cli__ArgumentSpec arguments[], Cli_ParsedArgs *out) {
     schema->build(arguments, out);
@@ -495,7 +495,7 @@ static Cli_ParseStatus cli__parse_schema(Cli__Schema *schema, int argc, char *ar
     *selected = 0;
     cli__build_schema(schema, arguments, out);
     arguments[count - 1].destination = &help_requested;
-#ifndef NDEBUG
+#ifndef CLI_NDEBUG
     Cli_ParseStatus valid = cli__validate_schema(schema, arguments, error);
     if (valid != CLI_OK) return valid;
 #endif
