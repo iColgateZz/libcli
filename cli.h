@@ -86,18 +86,18 @@ typedef enum {
     CLI_COMMANDS
 } Cli_Command;
 #undef CLI_PRIVATE_COMMAND
-#endif
+#endif //CLI_COMMANDS
 
 
 struct Cli_ParsedArgs {
     CLI_ARGUMENTS
 #ifdef CLI_COMMANDS
-    Cli_Command command;
+    Cli_Command cmd_type;
     union {
 #define CLI_PRIVATE_COMMAND(field, ...) Cli_CommandArgs_##field field;
         CLI_COMMANDS
 #undef CLI_PRIVATE_COMMAND
-    } commands;
+    } cmd;
 #endif
 };
 #undef CLI_PRIVATE_ARG
@@ -255,8 +255,8 @@ static void build_root(ArgumentSpec *cli__arguments, Cli_ParsedArgs *cli__out) {
 #ifdef CLI_COMMANDS
 #define CLI_PRIVATE_COMMAND(field, name, description, schema) \
     static void build_command_##field(ArgumentSpec *cli__arguments, Cli_ParsedArgs *cli__parent) { \
-        Cli_CommandArgs_##field *cli__out = cli__parent ? &cli__parent->commands.field : NULL; \
-        if (cli__parent) cli__parent->command = cli_command_##field; \
+        Cli_CommandArgs_##field *cli__out = cli__parent ? &cli__parent->cmd.field : NULL; \
+        if (cli__parent) cli__parent->cmd_type = cli_command_##field; \
         size_t cli__index = 0; \
         schema \
         (void)cli__arguments; (void)cli__out; (void)cli__index; \
@@ -538,15 +538,15 @@ Cli_ParseStatus cli_parse(int argc, char *argv[], Cli_ParsedArgs *out, void *con
     size_t selected;
     Cli_ParseStatus status = schema_parse(&cli_root_schema, argc, argv, out, context, &selected, error);
 #ifdef CLI_COMMANDS
-    out->command = (Cli_Command)selected;
+    out->cmd_type = (Cli_Command)selected;
 #endif
     return status;
 }
 
 static Schema *parsed_args_select_schema(Cli_ParsedArgs *args) {
 #ifdef CLI_COMMANDS
-    if (args && args->command > cli_command_none && (size_t)args->command < cli_root_schema.command_count)
-        return &cli_commands[args->command].schema;
+    if (args && args->cmd_type > cli_command_none && (size_t)args->cmd_type < cli_root_schema.command_count)
+        return &cli_commands[args->cmd_type].schema;
 #else
     (void)args;
 #endif
@@ -560,7 +560,7 @@ void cli_print_usage(FILE *stream, char *program, Cli_ParsedArgs *args) {
     schema_build(schema, arguments, NULL);
     fprintf(stream, "Usage: %s", program);
 #ifdef CLI_COMMANDS
-    if (schema != &cli_root_schema) fprintf(stream, " %s", cli_commands[args->command].name);
+    if (schema != &cli_root_schema) fprintf(stream, " %s", cli_commands[args->cmd_type].name);
 #endif
 
     bool short_flags = false;

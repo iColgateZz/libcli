@@ -78,13 +78,13 @@ Define each command's arguments just like the root arguments, then list commands
 #include "cli.h"
 ```
 
-This generates `args.command` (`cli_command_none` or `cli_command_greet`) and
-`args.commands.greet.count` / `args.commands.greet.name`. Command fields share a
+This generates `args.cmd_type` (`cli_command_none` or `cli_command_greet`) and
+`args.cmd.greet.count` / `args.cmd.greet.name`. Command fields share a
 union; read only the selected member. Each child has a public
 `Cli_CommandArgs_<field>` type, and the selector has type `Cli_Command`.
 Only the selected command's defaults are initialized during parsing.
 The field identifier and command-line name may differ. With commands enabled,
-root fields `command` and `commands` and the command identifier `none` are reserved.
+root fields `cmd_type` and `cmd` and the command identifier `none` are reserved.
 Help is reported through `CLI_HELP`; no help flag or placeholder field is added
 to the generated results. The command selector determines which help to print.
 
