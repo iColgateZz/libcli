@@ -30,35 +30,48 @@ Cli_ParseStatus cli_parse_flag(char *input, void *destination, void *context, Cl
 Cli_ParseStatus cli_parse_text(char *input, void *destination, void *context, Cli_ParseError *error);
 Cli_ParseStatus cli_parse_i64(char *input, void *destination, void *context, Cli_ParseError *error);
 Cli_ParseStatus cli_parse_u64(char *input, void *destination, void *context, Cli_ParseError *error);
-Cli_ParseStatus cli_parse_double(char *input, void *destination, void *context, Cli_ParseError *error);
-
-//TODO: better names and out-of-the-box versions
-#define CLI_ARG(type, field, parser, ...) \
-    CLI_PRIVATE_ARG(OPTION, type, field, parser, __VA_ARGS__)
+Cli_ParseStatus cli_parse_f64(char *input, void *destination, void *context, Cli_ParseError *error);
 
 #define CLI_ARG_FLAG(field, ...) \
     CLI_PRIVATE_ARG(FLAG, bool, field, cli_parse_flag, __VA_ARGS__)
 
-#define CLI_ARG_LIST(type, field, parser, ...) \
+
+#define CLI_ARG_OPTION(type, field, parser, ...) \
+    CLI_PRIVATE_ARG(OPTION, type, field, parser, __VA_ARGS__)
+
+#define CLI_ARG_OPTION_TEXT(field, ...) \
+    CLI_ARG_OPTION(char *, field, cli_parse_text, __VA_ARGS__)
+
+#define CLI_ARG_OPTION_I64(field, ...) \
+    CLI_ARG_OPTION(int64_t, field, cli_parse_i64, __VA_ARGS__)
+
+#define CLI_ARG_OPTION_U64(field, ...) \
+    CLI_ARG_OPTION(uint64_t, field, cli_parse_u64, __VA_ARGS__)
+
+#define CLI_ARG_OPTION_F64(field, ...) \
+    CLI_ARG_OPTION(double, field, cli_parse_f64, __VA_ARGS__)
+
+#define CLI_ARG_OPTION_LIST(type, field, parser, ...) \
     CLI_PRIVATE_ARG(OPTION_LIST, type, field, parser, __VA_ARGS__)
+
 
 #define CLI_ARG_POSITIONAL(type, field, parser, ...) \
     CLI_PRIVATE_ARG(POSITIONAL, type, field, parser, __VA_ARGS__)
 
+#define CLI_ARG_POSITIONAL_TEXT(field, ...) \
+    CLI_ARG_POSITIONAL(char *, field, cli_parse_text, __VA_ARGS__)
+
+#define CLI_ARG_POSITIONAL_I64(field, ...) \
+    CLI_ARG_POSITIONAL(int64_t, field, cli_parse_i64, __VA_ARGS__)
+
+#define CLI_ARG_POSITIONAL_U64(field, ...) \
+    CLI_ARG_POSITIONAL(uint64_t, field, cli_parse_u64, __VA_ARGS__)
+
+#define CLI_ARG_POSITIONAL_F64(field, ...) \
+    CLI_ARG_POSITIONAL(double, field, cli_parse_f64, __VA_ARGS__)
+
 #define CLI_ARG_POSITIONAL_LIST(type, field, parser, ...) \
     CLI_PRIVATE_ARG(POSITIONAL_LIST, type, field, parser, __VA_ARGS__)
-
-#define CLI_ARG_DOUBLE(field, ...) \
-    CLI_ARG(double, field, cli_parse_double, __VA_ARGS__)
-
-#define CLI_ARG_TEXT(field, ...) \
-    CLI_ARG(char *, field, cli_parse_text, __VA_ARGS__)
-
-#define CLI_ARG_I64(field, ...) \
-    CLI_ARG(int64_t, field, cli_parse_i64, __VA_ARGS__)
-
-#define CLI_ARG_U64(field, ...) \
-    CLI_ARG(uint64_t, field, cli_parse_u64, __VA_ARGS__)
 
 #define CLI_COMMAND CLI_PRIVATE_COMMAND
 
@@ -697,7 +710,7 @@ Cli_ParseStatus cli_parse_u64(char *input, void *destination, void *context, Cli
     return CLI_OK;
 }
 
-Cli_ParseStatus cli_parse_double(char *input, void *destination, void *context, Cli_ParseError *error) {
+Cli_ParseStatus cli_parse_f64(char *input, void *destination, void *context, Cli_ParseError *error) {
     (void)context;
     char *end;
     errno = 0;

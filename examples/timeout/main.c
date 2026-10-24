@@ -30,7 +30,7 @@ static Cli_ParseStatus parse_signal(char *input, void *destination, void *contex
 static Cli_ParseStatus parse_seconds(char *input, void *destination, void *context, Cli_ParseError *error) {
     double seconds;
 
-    if (cli_parse_double(input, &seconds, context, error) != CLI_OK)
+    if (cli_parse_f64(input, &seconds, context, error) != CLI_OK)
         return CLI_ERROR;
 
     if (seconds < 0) {
@@ -54,7 +54,7 @@ static Cli_ParseStatus parse_argument(char *input, void *destination, void *cont
 }
 
 #define CLI_ARGUMENTS                                                                                                  \
-    CLI_ARG(int, signal, parse_signal, .short_name = 's', .label = "SIG", .default_value = SIGTERM,                    \
+    CLI_ARG_OPTION(int, signal, parse_signal, .short_name = 's', .label = "SIG", .default_value = SIGTERM,             \
             .description = "Signal number sent on timeout (default 15, SIGTERM)")                                      \
     CLI_ARG_POSITIONAL(double, seconds, parse_seconds, .required = true, .label = "SECS",                              \
                        .description = "Time limit in seconds; fractions allowed, 0 disables the limit")                \

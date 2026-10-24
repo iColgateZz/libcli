@@ -35,16 +35,21 @@ application flow:
 | Macro | Purpose |
 | --- | --- |
 | `CLI_ARG_FLAG` | Boolean option |
-| `CLI_ARG_TEXT`, `CLI_ARG_I64`, `CLI_ARG_U64`, `CLI_ARG_DOUBLE` | Named option with one typed value |
-| `CLI_ARG` | Named option with a custom type and parser |
-| `CLI_ARG_LIST` | Repeated named option; callback receives each value |
-| `CLI_ARG_POSITIONAL` | One positional value |
+| `CLI_ARG_OPTION_TEXT`, `CLI_ARG_OPTION_I64`, `CLI_ARG_OPTION_U64`, `CLI_ARG_OPTION_F64` | Named option with one typed value |
+| `CLI_ARG_OPTION` | Named option with a custom type and parser |
+| `CLI_ARG_OPTION_LIST` | Repeated named option; callback receives each value |
+| `CLI_ARG_POSITIONAL_TEXT`, `CLI_ARG_POSITIONAL_I64`, `CLI_ARG_POSITIONAL_U64`, `CLI_ARG_POSITIONAL_F64` | One typed positional value |
+| `CLI_ARG_POSITIONAL` | Positional value with a custom type and parser |
 | `CLI_ARG_POSITIONAL_LIST` | Trailing positional values; callback receives each token |
 
 Named arguments accept `.short_name`, `.long_name`, or both. Value-taking
 arguments accept `.label`. All kinds accept `.description`, `.required`, and a
 typed `.default_value` C initializer. Defaults do not satisfy required presence.
-Flags default to false; other omitted defaults are zero-initialized.
+Flags default to false; other omitted defaults are zero-initialized. `TEXT` uses
+borrowed `char *`, `I64` and `U64` use `int64_t` and `uint64_t`, and `F64` uses
+C's `double` with the `cli_parse_f64` parser. The typed macros select only the
+field type and parser; `.required` and `.default_value` remain explicit settings.
+Lists keep application-defined types and parser callbacks.
 
 Default expressions are evaluated at runtime during parsing. Printing usage or
 help also evaluates the displayed schema's defaults, without updating the parsed
@@ -67,8 +72,8 @@ Define each command's arguments just like the root arguments, then list commands
 
 ```c
 #define GREET_ARGUMENTS \
-    CLI_ARG_U64(count, .short_name = 'c', .default_value = 1, .label = "NUM") \
-    CLI_ARG_POSITIONAL(char *, name, cli_parse_text, .required = true, .label = "NAME")
+    CLI_ARG_OPTION_U64(count, .short_name = 'c', .default_value = 1, .label = "NUM") \
+    CLI_ARG_POSITIONAL_TEXT(name, .required = true, .label = "NAME")
 
 #define CLI_ARGUMENTS \
     CLI_ARG_FLAG(verbose, .short_name = 'v', .long_name = "verbose")

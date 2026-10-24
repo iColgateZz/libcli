@@ -10,14 +10,14 @@
     CLI_COMMAND(add, "add", "Add two numbers", ADD_ARGUMENTS)
 
 #define GREET_ARGUMENTS \
-    CLI_ARG_U64(count, .short_name = 'c', .long_name = "count", .default_value = 1, .label = "NUM", \
+    CLI_ARG_OPTION_U64(count, .short_name = 'c', .long_name = "count", .default_value = 1, .label = "NUM", \
         .description = "Number of greetings") \
-    CLI_ARG_POSITIONAL(char *, name, cli_parse_text, .required = true, .label = "NAME", \
+    CLI_ARG_POSITIONAL_TEXT(name, .required = true, .label = "NAME", \
         .description = "Person to greet")
 
 #define ADD_ARGUMENTS \
-    CLI_ARG_POSITIONAL(double, left, cli_parse_double, .required = true, .label = "LEFT") \
-    CLI_ARG_POSITIONAL(double, right, cli_parse_double, .required = true, .label = "RIGHT")
+    CLI_ARG_POSITIONAL_F64(left, .required = true, .label = "LEFT") \
+    CLI_ARG_POSITIONAL_F64(right, .required = true, .label = "RIGHT")
 
 #include "../../cli.h"
 
