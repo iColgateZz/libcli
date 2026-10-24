@@ -150,8 +150,12 @@ struct Cli__Command {
     Cli__Schema schema;
 };
 
-#define CLI_PRIVATE_BOLD(text) "\033[1m" text "\033[0m"
-#define CLI_PRIVATE_UNDERLINE(text) "\033[4m" text "\033[0m"
+#ifndef CLI_BOLD
+#define CLI_BOLD(text) "\033[1m" text "\033[0m"
+#endif
+#ifndef CLI_UNDERLINE
+#define CLI_UNDERLINE(text) "\033[4m" text "\033[0m"
+#endif
 
 static Cli_ParseStatus cli__parse_schema(Cli__Schema *schema, int argc, char *argv[], Cli_ParsedArgs *out,
                                    void *context, size_t *selected, Cli_ParseError *error);
@@ -288,20 +292,20 @@ void cli_print_help(FILE *stream, Cli_ParsedArgs *args) {
             fputs("  ", stream);
 
             if (argument->short_name) {
-                fprintf(stream, CLI_PRIVATE_BOLD("-%c"), argument->short_name);
+                fprintf(stream, CLI_BOLD("-%c"), argument->short_name);
                 if (argument->kind != CLI_ARGUMENT_FLAG)
-                    fprintf(stream, " " CLI_PRIVATE_UNDERLINE("%s"), label);
+                    fprintf(stream, " " CLI_UNDERLINE("%s"), label);
             }
 
             if (argument->long_name) {
                 if (argument->short_name) fputs(", ", stream);
-                fprintf(stream, CLI_PRIVATE_BOLD("--%s"), argument->long_name);
+                fprintf(stream, CLI_BOLD("--%s"), argument->long_name);
                 if (argument->kind != CLI_ARGUMENT_FLAG)
-                    fprintf(stream, "=" CLI_PRIVATE_UNDERLINE("%s"), label);
+                    fprintf(stream, "=" CLI_UNDERLINE("%s"), label);
             }
 
             if (cli__is_positional(argument)) {
-                fprintf(stream, CLI_PRIVATE_UNDERLINE("%s"), label);
+                fprintf(stream, CLI_UNDERLINE("%s"), label);
                 if (kind == CLI_ARGUMENT_POSITIONAL_LIST) fputs("...", stream);
             }
 
@@ -318,7 +322,7 @@ void cli_print_help(FILE *stream, Cli_ParsedArgs *args) {
         fputs("Commands:\n", stream);
         for (size_t i = 1; i < schema->command_count; ++i) {
             Cli__Command *command = &schema->commands[i];
-            fprintf(stream, "  " CLI_PRIVATE_BOLD("%s") "\n", command->name);
+            fprintf(stream, "  " CLI_BOLD("%s") "\n", command->name);
             if (command->description) fprintf(stream, "      %s\n", command->description);
             fputc('\n', stream);
         }
@@ -732,8 +736,5 @@ static Cli_ParseStatus cli__set_argument_error(Cli_ParseError *error, Cli__Argum
     *error = result;
     return CLI_ERROR;
 }
-
-#undef CLI_PRIVATE_BOLD
-#undef CLI_PRIVATE_UNDERLINE
 
 #endif

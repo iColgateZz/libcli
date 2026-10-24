@@ -166,7 +166,18 @@ the stack sized by the schema, with one frame for each active command scope.
 
 The parser neither prints nor exits. Call `cli_print_usage(stream, program, &args)`
 and `cli_print_help(stream, &args)` explicitly. Help uses ANSI bold and underline
-sequences. Default values are not automatically printed.
+sequences by default. Override `CLI_BOLD(text)` and `CLI_UNDERLINE(text)` before
+the implementation include to change styling. Each macro must expand to a string
+literal suitable for concatenation. To disable styling:
+
+```c
+#define CLI_BOLD(text) text
+#define CLI_UNDERLINE(text) text
+```
+
+Each macro can be overridden independently. Styling is configured at compile
+time; the library does not detect terminals. Default values are not automatically
+printed.
 
 ## License
 
