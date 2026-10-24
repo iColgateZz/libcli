@@ -1,5 +1,3 @@
 1. Defaults in help text
-2. May want to define subcommands but also use without the subcommand, e.g. ./binary [-options] [subcommand [args...]]
-3. Better diagnostic messages
-4. Deeper subcommand nesting?
-5. defaults are evaluated multiple times
+2. Deeper subcommand nesting?
+3. defaults are evaluated multiple times

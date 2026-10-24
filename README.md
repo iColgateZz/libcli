@@ -94,8 +94,13 @@ Schemas without arguments produce empty result structs, including argumentless
 subcommands. Empty structs and unions are invalid in standard C99; strict builds
 reject them through the compiler's normal diagnostics.
 
-A command is required when `CLI_COMMANDS` contains entries. Root options go before
-the command name, and command options go after it. Each scope recognizes its own
+A command is required by default. Define `CLI_COMMANDS_REQUIRED` as `false` before
+the implementation include to allow root-only invocations such as `app -v`.
+These return `CLI_OK` with `args.cmd_type == cli_cmd_none`, provided all required
+root arguments are present. Usage then shows `[COMMAND [ARGS...]]`. Unknown
+commands still fail.
+
+Root options go before the command name, and command options go after it. Each scope recognizes its own
 `--` separator. Root schemas with commands cannot also declare positional
 arguments; put those in the command schemas. This version supports one command
 level and one root schema per program.
@@ -139,13 +144,22 @@ examples/commands/build/commands greet --help
 
 Custom callbacks receive the input string, destination field, caller context,
 and error output. Return `CLI_OK` or `CLI_ERROR`; on failure supply a useful
-`error->message`. The library supplies the input and a fallback message if
-omitted. Callbacks control list storage and capacity checks.
+`error->message`, a 256-byte buffer. Use `snprintf(error->message,
+sizeof(error->message), "...", ...)` for formatted details or initialize the
+whole error with a string literal. Messages are truncated to fit and must be
+null-terminated. The library prefixes callback errors with the long option name
+(or short name when no long name exists), or the positional label.
+`error->input` remains a borrowed pointer to the offending value; a callback may
+set it to identify a more specific part of that value. The library supplies the
+input and a fallback message if omitted. For example, reporting `--count=abc`
+prints `--count: invalid or out-of-range unsigned integer: 'abc'` using the
+example's existing error-output code. Callbacks control list storage and capacity
+checks.
 
 Each parse initializes fields from their defaults. Text values borrow `argv`
 strings without modifying them. List storage belongs to the application.
 Results may be partially updated on failure and should then be discarded.
-Schema checks are enabled in debug builds and omitted with `NDEBUG`.
+Schema checks are enabled by default and omitted with `CLI_NDEBUG`.
 The library allocates no heap memory. Parsing uses C99 variable-length arrays on
 the stack sized by the schema, with one frame for each active command scope.
 

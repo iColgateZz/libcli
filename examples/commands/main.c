@@ -4,6 +4,7 @@
 #define CLI_ARGUMENTS \
     CLI_ARG_FLAG(verbose, .short_name = 'v', .long_name = "verbose", .description = "Print extra diagnostics")
 
+#define CLI_COMMANDS_REQUIRED false
 #define CLI_COMMANDS \
     CLI_COMMAND(greet, "greet", "Print a greeting", GREET_ARGUMENTS) \
     CLI_COMMAND(add, "add", "Add two numbers", ADD_ARGUMENTS)
@@ -52,7 +53,9 @@ int main(int argc, char *argv[]) {
             printf("%g\n", args.cmd.add.left + args.cmd.add.right);
             break;
 
-        default: break;
+        case cli_cmd_none:
+            if (args.verbose) fprintf(stderr, "no command selected\n");
+            break;
     }
 
     return 0;
