@@ -19,7 +19,7 @@ typedef Cli_ParseStatus (*Cli_Parser)(char *input, void *destination, void *cont
 
 struct Cli_ParseError {
     char *input;
-    char *message;
+    char message[256];
 };
 
 Cli_ParseStatus cli_parse(int argc, char *argv[], Cli_ParsedArgs *out, void *context, Cli_ParseError *error);
@@ -141,6 +141,7 @@ typedef struct {
     void (*build)(Cli__ArgumentSpec *arguments, Cli_ParsedArgs *out);
     Cli__Command *commands;
     size_t command_count;
+    bool commands_required;
 } Cli__Schema;
 
 struct Cli__Command {
@@ -153,7 +154,26 @@ struct Cli__Command {
 #define CLI_PRIVATE_UNDERLINE(text) "\033[4m" text "\033[0m"
 
 static Cli_ParseStatus cli__set_error(Cli_ParseError *error, char *input, char *message) {
-    *error = (Cli_ParseError) {.input = input, .message = message};
+    error->input = input;
+    snprintf(error->message, sizeof(error->message), "%s", message);
+    return CLI_ERROR;
+}
+
+static Cli_ParseStatus cli__set_argument_error(Cli_ParseError *error, Cli__ArgumentSpec *argument,
+                                             char *input, char *message) {
+    Cli_ParseError result = {.input = input};
+    if (argument->long_name)
+        snprintf(result.message, sizeof(result.message), "--%s: %s", argument->long_name, message);
+    else if (argument->short_name)
+        snprintf(result.message, sizeof(result.message), "-%c: %s", argument->short_name, message);
+    else {
+        char *arg = argument->label 
+                    ? argument->label 
+                    : "argument";
+        snprintf(result.message, sizeof(result.message), "%s: %s", arg, message);
+    }
+
+    *error = result;
     return CLI_ERROR;
 }
 
@@ -290,6 +310,11 @@ static Cli__Schema cli__root_schema = {
 #ifdef CLI_COMMANDS
     .commands = cli__commands,
     .command_count = sizeof(cli__commands) / sizeof(cli__commands[0]),
+#ifdef CLI_COMMANDS_REQUIRED
+    .commands_required = CLI_COMMANDS_REQUIRED,
+#else
+    .commands_required = true,
+#endif
 #endif
 };
 #undef CLI_PRIVATE_ARG
@@ -369,15 +394,21 @@ static Cli_ParseStatus cli__parse_tokens(size_t count, Cli__ArgumentSpec argumen
 
             // No candidate found
             if (match == count) {
+                if (named && !long_option) {
+                    error->input = token;
+                    snprintf(error->message, sizeof(error->message), "unknown option '-%c'", short_cursor[-1]);
+                    return CLI_ERROR;
+                }
+
                 char *message = named ? "unknown option" : "unexpected positional argument";
                 return cli__set_error(error, token, message);
             }
 
-            if (seen[match] && arguments[match].kind != CLI_ARGUMENT_OPTION_LIST
-                 && arguments[match].kind != CLI_ARGUMENT_POSITIONAL_LIST)
-                return cli__set_error(error, token, "argument is duplicated");
-
             Cli__ArgumentSpec *argument = &arguments[match];
+            if (seen[match] && argument->kind != CLI_ARGUMENT_OPTION_LIST
+                 && argument->kind != CLI_ARGUMENT_POSITIONAL_LIST)
+                return cli__set_argument_error(error, argument, token, "argument is duplicated");
+
             char *value = NULL;
             if (argument->kind != CLI_ARGUMENT_FLAG) {
                 if (!named)
@@ -390,20 +421,23 @@ static Cli_ParseStatus cli__parse_tokens(size_t count, Cli__ArgumentSpec argumen
                 else if (i + 1 < argc)
                     value = argv[++i];
                 else
-                    return cli__set_error(error, token, "option requires a value");
+                    return cli__set_argument_error(error, argument, NULL, "option requires a value");
 
                 // Short option is consumed fully or it is NULL from the start
                 short_cursor = NULL;
             }
             else if (equals != NULL) {
-                return cli__set_error(error, token, "flag does not take a value");
+                return cli__set_argument_error(error, argument, equals + 1, "flag does not take a value");
             }
 
-            *error = (Cli_ParseError){0};
+            *error = (Cli_ParseError) {0};
             Cli_ParseStatus status = argument->parse(value, argument->destination, context, error);
             if (status != CLI_OK) {
-                if (error->input == NULL) error->input = value;
-                if (error->message == NULL) error->message = "invalid argument value";
+                cli__set_argument_error(error, argument, 
+                    error->input ? error->input : value,
+                    error->message[0] ? error->message : "invalid argument value"
+                );
+
                 return status;
             }
 
@@ -464,8 +498,7 @@ static Cli_ParseStatus cli__validate_schema(Cli__Schema *schema, Cli__ArgumentSp
         }
 
         if (message != NULL) {
-            char *input = argument->long_name ? argument->long_name : argument->label;
-            return cli__set_error(error, input, message);
+            return cli__set_argument_error(error, argument, NULL, message);
         }
     }
 
@@ -495,8 +528,9 @@ static void cli__build_schema(Cli__Schema *schema, Cli__ArgumentSpec arguments[]
 static Cli_ParseStatus cli__parse_schema(Cli__Schema *schema, int argc, char *argv[], Cli_ParsedArgs *out,
                                    void *context, size_t *selected, Cli_ParseError *error) {
     size_t count = schema->argument_count;
-    Cli__ArgumentSpec arguments[count] = {0};
-    bool seen[count] = {0};
+    Cli__ArgumentSpec arguments[count];
+    bool seen[count];
+    memset(seen, 0, sizeof(seen));
     bool help_requested = false;
     *selected = 0;
 
@@ -514,8 +548,10 @@ static Cli_ParseStatus cli__parse_schema(Cli__Schema *schema, int argc, char *ar
     if (help_requested) return CLI_HELP;
     if (status != CLI_OK) return status;
 
-    if (schema->command_count > 1) {
-        if (command_position == argc) return cli__set_error(error, NULL, "command is required");
+    if (schema->commands_required && command_position == argc)
+        return cli__set_error(error, NULL, "command is required");
+
+    if (command_position < argc) {
         size_t command = 1;
         while (command < schema->command_count &&
                strcmp(argv[command_position], schema->commands[command].name) != 0)
@@ -537,8 +573,7 @@ static Cli_ParseStatus cli__parse_schema(Cli__Schema *schema, int argc, char *ar
     for (size_t i = 0; i < count; ++i) {
         if (arguments[i].required && !seen[i]) {
             *selected = 0;
-            char *input = arguments[i].long_name ? arguments[i].long_name : arguments[i].label;
-            return cli__set_error(error, input, "required argument is missing");
+            return cli__set_argument_error(error, &arguments[i], NULL, "required argument is missing");
         }
     }
     return CLI_OK;
@@ -609,7 +644,13 @@ void cli_print_usage(FILE *stream, char *program, Cli_ParsedArgs *args) {
         }
     }
 
-    if (schema->command_count > 1) fputs(" COMMAND [ARGS...]", stream);
+    if (schema->command_count > 1) {
+        char *message = schema->commands_required 
+                        ? " COMMAND [ARGS...]" 
+                        : " [COMMAND [ARGS...]]";
+        fputs(message, stream);
+    }
+
     fputc('\n', stream);
 }
 
