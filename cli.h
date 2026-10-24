@@ -163,14 +163,14 @@ static Cli_ParseStatus cli__set_argument_error(Cli_ParseError *error, Cli__Argum
                                              char *input, char *message) {
     Cli_ParseError result = {.input = input};
     if (argument->long_name)
-        snprintf(result.message, sizeof(result.message), "--%s: %s", argument->long_name, message);
+        snprintf(result.message, sizeof(result.message), "%s: --%s", message, argument->long_name);
     else if (argument->short_name)
-        snprintf(result.message, sizeof(result.message), "-%c: %s", argument->short_name, message);
+        snprintf(result.message, sizeof(result.message), "%s: -%c", message, argument->short_name);
     else {
-        char *arg = argument->label 
-                    ? argument->label 
+        char *arg = argument->label
+                    ? argument->label
                     : "argument";
-        snprintf(result.message, sizeof(result.message), "%s: %s", arg, message);
+        snprintf(result.message, sizeof(result.message), "%s: %s", message, arg);
     }
 
     *error = result;
@@ -396,7 +396,7 @@ static Cli_ParseStatus cli__parse_tokens(size_t count, Cli__ArgumentSpec argumen
             if (match == count) {
                 if (named && !long_option) {
                     error->input = token;
-                    snprintf(error->message, sizeof(error->message), "unknown option '-%c'", short_cursor[-1]);
+                    snprintf(error->message, sizeof(error->message), "unknown option: -%c", short_cursor[-1]);
                     return CLI_ERROR;
                 }
 

@@ -147,12 +147,13 @@ and error output. Return `CLI_OK` or `CLI_ERROR`; on failure supply a useful
 `error->message`, a 256-byte buffer. Use `snprintf(error->message,
 sizeof(error->message), "...", ...)` for formatted details or initialize the
 whole error with a string literal. Messages are truncated to fit and must be
-null-terminated. The library prefixes callback errors with the long option name
-(or short name when no long name exists), or the positional label.
+null-terminated. The library appends the quoted long option name
+(or short name when no long name exists), or the positional label, after the
+error message.
 `error->input` remains a borrowed pointer to the offending value; a callback may
 set it to identify a more specific part of that value. The library supplies the
 input and a fallback message if omitted. For example, reporting `--count=abc`
-prints `--count: invalid or out-of-range unsigned integer: 'abc'` using the
+prints `invalid or out-of-range unsigned integer: '--count': 'abc'` using the
 example's existing error-output code. Callbacks control list storage and capacity
 checks.
 

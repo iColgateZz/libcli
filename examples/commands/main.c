@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
 
     if (status == CLI_ERROR) {
         fprintf(stderr, "%s", error.message);
-        if (error.input) fprintf(stderr, ": '%s'", error.input);
+        if (error.input) fprintf(stderr, "; given '%s'", error.input);
         fputc('\n', stderr);
         cli_print_usage(stderr, argv[0], &args);
         return 2;
