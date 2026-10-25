@@ -34,6 +34,7 @@ application flow:
 
 | Macro | Purpose |
 | --- | --- |
+| `CLI_NO_ARGUMENTS` | Explicitly empty root or command schema |
 | `CLI_ARG_FLAG` | Boolean option |
 | `CLI_ARG_OPTION_TEXT`, `CLI_ARG_OPTION_I64`, `CLI_ARG_OPTION_U64`, `CLI_ARG_OPTION_F64` | Named option with one typed value |
 | `CLI_ARG_OPTION` | Named option with a custom type and parser |
@@ -90,14 +91,26 @@ union; read only the selected member. Each child has a public
 Only the selected command's defaults are initialized during parsing.
 The field identifier and command-line name may differ. With commands enabled,
 root fields `cmd_type` and `cmd` and the command identifier `none` are reserved.
-Help is reported through `CLI_HELP`; no help flag or placeholder field is added
-to the generated results. The command selector determines which help to print.
+Help is reported through `CLI_HELP`; no help flag is added to the generated
+results. The command selector determines which help to print.
 
 Omit `CLI_COMMANDS` when there are no subcommands; no command enum or union is
 then generated. Defining an empty `CLI_COMMANDS` produces an empty union.
-Schemas without arguments produce empty result structs, including argumentless
-subcommands. Empty structs and unions are invalid in standard C99; strict builds
-reject them through the compiler's normal diagnostics.
+Use `CLI_NO_ARGUMENTS` as the entire argument schema for an argumentless command:
+
+```c
+#define CLI_COMMANDS \
+    CLI_COMMAND(status, "status", "Show status", CLI_NO_ARGUMENTS)
+```
+
+It also supports an explicitly empty root schema with
+`#define CLI_ARGUMENTS CLI_NO_ARGUMENTS`. The marker contributes one storage-only
+byte to the generated struct so it is valid C99; it contributes no argument
+metadata or parsing work. Automatic `-h`/`--help` still works, and unexpected
+options or positional values fail. Do not access the storage field.
+A literally empty argument schema still produces an invalid empty struct when
+there are no other generated fields. Empty structs and unions are rejected by
+strict C99 builds.
 
 A command is required by default. Define `CLI_COMMANDS_REQUIRED` as `false` before
 the implementation include to allow root-only invocations such as `app -v`.

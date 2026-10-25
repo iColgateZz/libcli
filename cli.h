@@ -73,6 +73,8 @@ Cli_ParseStatus cli_parse_f64(char *input, void *destination, void *context, Cli
 #define CLI_ARG_POSITIONAL_LIST(type, field, parser, ...) \
     CLI_PRIVATE_ARG(POSITIONAL_LIST, type, field, parser, __VA_ARGS__)
 
+#define CLI_NO_ARGUMENTS CLI_PRIVATE_NO_ARGUMENTS
+
 #define CLI_COMMAND CLI_PRIVATE_COMMAND
 
 #endif //CLI_INCLUDE
@@ -85,6 +87,7 @@ Cli_ParseStatus cli_parse_f64(char *input, void *destination, void *context, Cli
 #if defined(CLI_ARGUMENTS) && !defined(CLI_SCHEMA_DEFINED)
 #define CLI_SCHEMA_DEFINED
 
+#define CLI_PRIVATE_NO_ARGUMENTS unsigned char __cli_unused;
 #define CLI_PRIVATE_ARG(kind, type, field, ...) type field;
 
 #ifdef CLI_COMMANDS
@@ -114,6 +117,7 @@ struct Cli_ParsedArgs {
 #endif
 };
 #undef CLI_PRIVATE_ARG
+#undef CLI_PRIVATE_NO_ARGUMENTS
 
 #endif
 
@@ -191,6 +195,7 @@ CLI_COMMANDS
 #undef CLI_PRIVATE_COMMAND
 #endif
 
+#define CLI_PRIVATE_NO_ARGUMENTS
 #define CLI_PRIVATE_ARG(...) + 1
 #ifdef CLI_COMMANDS
 #define CLI_PRIVATE_COMMAND(field, command_name, text, arguments) \
@@ -218,6 +223,7 @@ static Cli__Schema cli__root_schema = {
 #endif
 };
 #undef CLI_PRIVATE_ARG
+#undef CLI_PRIVATE_NO_ARGUMENTS
 
 Cli_ParseStatus cli_parse(int argc, char *argv[], Cli_ParsedArgs *out, void *context, Cli_ParseError *error) {
     *out = (Cli_ParsedArgs) {0};
@@ -628,6 +634,7 @@ static void cli__build_schema(Cli__Schema *schema, Cli__ArgumentSpec arguments[]
 
 #define CLI_PRIVATE_POSITIONAL_LIST_SETTINGS(settings) CLI_PRIVATE_POSITIONAL_SETTINGS(settings)
 
+#define CLI_PRIVATE_NO_ARGUMENTS
 #define CLI_PRIVATE_ARG(category, type, field, parser, ...) { \
     struct { type default_value; CLI_PRIVATE_##category##_FIELDS } argument_settings = {__VA_ARGS__}; \
     \
@@ -662,6 +669,7 @@ CLI_COMMANDS
 #undef CLI_PRIVATE_COMMAND
 #endif
 #undef CLI_PRIVATE_ARG
+#undef CLI_PRIVATE_NO_ARGUMENTS
 
 #undef CLI_PRIVATE_FLAG_FIELDS
 #undef CLI_PRIVATE_OPTION_FIELDS
