@@ -1,7 +1,7 @@
 # libcli
 
 libcli is a single-header C99 library that generates a command-line interface from an argument schema.
-Declare flags, options, and positional arguments once, then libcli generates typed result structs and the code for parsing arguments and printing usage and help.
+Declare flags, options, and positional arguments once, then libcli generates typed result structs and  code for parsing arguments and printing usage and help.
 
 ## Setup
 
@@ -43,10 +43,33 @@ Build with `cc -std=c99 example.c` and run `./a.out -c 3 localhost`.
 ## Other Examples
 
 - [Commands](examples/commands/main.c): typed subcommands and flags.
-- [Timeout](examples/timeout/README.md): custom parsers and a trailing argument list.
+- [Timeout](examples/timeout/main.c): custom parsers and a trailing argument list.
 
 
 ## Public API
+
+### Main functions
+
+`cli_parse(argc, argv, &args, context, &error)` reads the command line,
+parses values, and checks required arguments. Each call first initializes
+`args` from the schema's defaults. It returns:
+
+- `CLI_OK`: the parsed values are ready to use in `args`.
+- `CLI_HELP`: help was requested; choose how to print it and exit.
+- `CLI_ERROR`: `error.message` explains the failure; `error.input` optionally
+  points to the error input.
+
+Pass `argc` and `argv` from `main`. `context` is the same as `userdata`. It is passed unchanged to custom
+parsers.
+
+`cli_print_usage(stream, program, &args)` prints a short usage line showing
+how to call the program (or its subcommand): its flags, options, and positional arguments. Pass `argv[0]` as `program`.
+
+`cli_print_help(stream, &args)` lists arguments and commands with their
+names, value labels, and descriptions. It does not include the usage line;
+call both printing functions for complete help.
+
+### Schema macros
 
 | Schema macro | Purpose |
 | --- | --- |
@@ -181,11 +204,21 @@ strings, so they stay valid only while those strings remain available.
 
 ## Limitations
 
-- One root schema per program and one level of subcommands.
-- Root options precede the command; root positionals cannot coexist with commands.
-- Defaults are runtime expressions, evaluated during parsing and again when
-  printing usage or help. Prefer expressions without side effects.
-- Help does not print default values or detect terminals automatically.
+- One argument schema per program. All source files use the same generated
+  `Cli_Arguments` type and `cli_parse` function. To share them, put your schema
+  in a guarded application header and include it wherever needed.
+- Subcommands have only one level. `app send ...` is supported; nested
+  command groups such as `app remote add ...` are not generated.
+- Root options go before the subcommand. If `-v` belongs to the main command,
+  write `app -v send file`. After `send`, only options declared for `send` are
+  recognized.
+- Default expressions can run more than once. A function call in
+  `.default_value` runs during parsing and again whenever usage or help is
+  printed for that schema. Calling both output functions evaluates it twice
+  more. Prefer constants or expressions without side effects.
+- Help does not automatically show defaults or adapt to the terminal. Add
+  defaults to descriptions if needed. Styling follows `CLI_BOLD` and
+  `CLI_UNDERLINE` even when output is redirected; override them to disable it.
 
 ## License
 
