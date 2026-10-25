@@ -1,202 +1,192 @@
-# cli.h
+# libcli
 
-A single-header C99 argument parser.
+libcli is a single-header C99 library that generates a command-line interface from an argument schema.
+Declare flags, options, and positional arguments once, then libcli generates typed result structs and the code for parsing arguments and printing usage and help.
 
-## Example
+## Setup
 
-The [timeout example](examples/timeout/README.md) runs a command with a time limit.
-It demonstrates scalar arguments, a custom signal parser, and a trailing list
-backed by fixed storage.
-
-```sh
-make -C examples/timeout
-examples/timeout/build/timeout --help
-examples/timeout/build/timeout 0.5 sleep 2
-examples/timeout/build/timeout -s 9 1 sh -c 'exec sleep 2'
-```
-
-The example targets macOS and Linux. Verified on macOS 26.3 and
-Debian GNU/Linux 13 (trixie) through OrbStack. See the example README for its
-behavior, exit statuses, and limitations.
-
-## Declaring arguments
-
-See [examples/timeout/main.c](examples/timeout/main.c) for a complete schema and
-application flow:
-
-1. Define `CLI_IMPLEMENTATION` in one C file and include `cli.h` for its public
-   declarations.
-2. Declare custom types, storage, and parser callbacks.
-3. Define `CLI_ARGUMENTS` using the macros below, then include `cli.h` again to
-   generate the result structure and implementation.
-4. Call `cli_parse(argc, argv, &args, context, &error)`. Handle `CLI_HELP`,
-   `CLI_ERROR`, or use the populated `args` on `CLI_OK`.
-
-| Macro | Purpose |
-| --- | --- |
-| `CLI_NO_ARGUMENTS` | Explicitly empty root or command schema |
-| `CLI_ARG_FLAG` | Boolean option |
-| `CLI_ARG_OPTION_TEXT`, `CLI_ARG_OPTION_I64`, `CLI_ARG_OPTION_U64`, `CLI_ARG_OPTION_F64` | Named option with one typed value |
-| `CLI_ARG_OPTION` | Named option with a custom type and parser |
-| `CLI_ARG_OPTION_LIST` | Repeated named option; callback receives each value |
-| `CLI_ARG_POSITIONAL_TEXT`, `CLI_ARG_POSITIONAL_I64`, `CLI_ARG_POSITIONAL_U64`, `CLI_ARG_POSITIONAL_F64` | One typed positional value |
-| `CLI_ARG_POSITIONAL` | Positional value with a custom type and parser |
-| `CLI_ARG_POSITIONAL_LIST` | Trailing positional values; callback receives each token |
-
-Named arguments accept `.short_name`, `.long_name`, or both. Value-taking
-arguments accept `.label`. All kinds accept `.description`, `.required`, and a
-typed `.default_value` C initializer. Defaults do not satisfy required presence.
-Flags default to false; other omitted defaults are zero-initialized. `TEXT` uses
-borrowed `char *`, `I64` and `U64` use `int64_t` and `uint64_t`, and `F64` uses
-C's `double` with the `cli_parse_f64` parser. The typed macros select only the
-field type and parser; `.required` and `.default_value` remain explicit settings.
-Lists keep application-defined types and parser callbacks.
-
-Default expressions are evaluated at runtime during parsing. Printing usage or
-help also evaluates the displayed schema's defaults, without updating the parsed
-result. Calling both output functions evaluates those expressions twice more.
-Function calls are allowed in defaults, but prefer constants or expressions
-without side effects; avoid allocations or work that must happen only once.
-
-The library generates one root schema per program. To share `Cli_ParsedArgs` across
-source files, put the schema and its type dependencies in an application header
-with an include guard. Include that header wherever its fields are needed;
-define `CLI_IMPLEMENTATION` before including it in exactly one C file. That file
-must include the schema as well as `cli.h`; defining `CLI_IMPLEMENTATION` with no
-schema does not emit an implementation. Private metadata and helpers are emitted
-only in that implementation file. Custom parser functions used by that
-implementation must be declared before expansion.
-
-## Subcommands
-
-Define each command's arguments just like the root arguments, then list commands:
+Copy `cli.h` into your project. Declare fields with `CLI_ARGUMENTS` and define
+`CLI_IMPLEMENTATION` in exactly one C file:
 
 ```c
-#define GREET_ARGUMENTS \
-    CLI_ARG_OPTION_U64(count, .short_name = 'c', .default_value = 1, .label = "NUM") \
-    CLI_ARG_POSITIONAL_TEXT(name, .required = true, .label = "NAME")
-
+#define CLI_IMPLEMENTATION
 #define CLI_ARGUMENTS \
-    CLI_ARG_FLAG(verbose, .short_name = 'v', .long_name = "verbose")
-
-#define CLI_COMMANDS \
-    CLI_COMMAND(greet, "greet", "Print a greeting", GREET_ARGUMENTS)
+    CLI_ARG_OPTION_U64(count, .short_name = 'c', .default_value = 1, .label = "NUM") \
+    CLI_ARG_POSITIONAL_TEXT(host, .required = true, .label = "HOST")
 #include "cli.h"
+
+int main(int argc, char *argv[]) {
+    Cli_Arguments args;
+    Cli_ParseError error;
+    Cli_ParseStatus status = cli_parse(argc, argv, &args, NULL, &error);
+
+    if (status == CLI_HELP) {
+        cli_print_usage(stdout, argv[0], &args);
+        cli_print_help(stdout, &args);
+        return 0;
+    }
+
+    if (status == CLI_ERROR) {
+        fprintf(stderr, "%s", error.message);
+        if (error.input) fprintf(stderr, ": '%s'", error.input);
+        fputc('\n', stderr);
+        return 1;
+    }
+
+    printf("%s: %llu\n", args.host, (unsigned long long)args.count);
+    return 0;
+}
 ```
 
-This generates `args.cmd_type` (`cli_cmd_none` or `cli_cmd_greet`) and
-`args.cmd.greet.count` / `args.cmd.greet.name`. Command fields share a
-union; read only the selected member. Each child has a public
-`Cli_CommandArgs_<field>` type, and the selector has type `Cli_Command`.
-Only the selected command's defaults are initialized during parsing.
-The field identifier and command-line name may differ. With commands enabled,
-root fields `cmd_type` and `cmd` and the command identifier `none` are reserved.
-Help is reported through `CLI_HELP`; no help flag is added to the generated
-results. The command selector determines which help to print.
+Build with `cc -std=c99 example.c` and run `./a.out -c 3 localhost`. 
 
-Omit `CLI_COMMANDS` when there are no subcommands; no command enum or union is
-then generated. Defining an empty `CLI_COMMANDS` produces an empty union.
-Use `CLI_NO_ARGUMENTS` as the entire argument schema for an argumentless command:
+## Other Examples
+
+- [Commands](examples/commands/main.c): typed subcommands and flags.
+- [Timeout](examples/timeout/README.md): custom parsers and a trailing argument list.
+
+
+## Public API
+
+| Schema macro | Purpose |
+| --- | --- |
+| `CLI_ARG_FLAG(field, ...)` | Boolean option |
+| `CLI_ARG_OPTION(type, field, parser, ...)` | Named option with one value |
+| `CLI_ARG_OPTION_LIST(type, field, parser, ...)` | Repeated named option |
+| `CLI_ARG_POSITIONAL(type, field, parser, ...)` | One positional value |
+| `CLI_ARG_POSITIONAL_LIST(type, field, parser, ...)` | Trailing positional values |
+| `CLI_ARG_OPTION_<TYPE>(field, ...)` | Typed option shortcut |
+| `CLI_ARG_POSITIONAL_<TYPE>(field, ...)` | Typed positional shortcut |
+| `CLI_NO_ARGUMENTS` | Explicitly empty root or command schema |
+| `CLI_COMMAND(field, name, description, arguments)` | Subcommand |
+
+`<TYPE>` is `TEXT`, `I64`, `U64`, or `F64`, using borrowed `char *`, `int64_t`,
+`uint64_t`, or `double`, respectively.
+
+Named arguments take `.short_name`, `.long_name`, or both. `.label` names a value
+and is required for positionals. All support `.description`, `.required`, and a
+typed `.default_value` initializer. If not provided otherwise, the default values are zero initialized.
+
+### Subcommands
+
+Define `CLI_COMMANDS` before including the library:
 
 ```c
 #define CLI_COMMANDS \
+    CLI_COMMAND(send, "send", "Send a file", SEND_ARGUMENTS) \
     CLI_COMMAND(status, "status", "Show status", CLI_NO_ARGUMENTS)
+
+#define SEND_ARGUMENTS \
+    CLI_ARG_POSITIONAL_TEXT(file, .required = true, .label = "FILE")
 ```
 
-It also supports an explicitly empty root schema with
-`#define CLI_ARGUMENTS CLI_NO_ARGUMENTS`. The marker contributes one storage-only
-byte to the generated struct so it is valid C99; it contributes no argument
-metadata or parsing work. Automatic `-h`/`--help` still works, and unexpected
-options or positional values fail. Do not access the storage field.
-A literally empty argument schema still produces an invalid empty struct when
-there are no other generated fields. Empty structs and unions are rejected by
-strict C99 builds.
+Inside the `Cli_Arguments` struct, this creates a union member `cmd` and an enum `cmd_type`. Use the `cmd_type` member to access the correct subcommand's parsed values.
 
-A command is required by default. Define `CLI_COMMANDS_REQUIRED` as `false` before
-the implementation include to allow root-only invocations such as `app -v`.
-These return `CLI_OK` with `args.cmd_type == cli_cmd_none`, provided all required
-root arguments are present. Usage then shows `[COMMAND [ARGS...]]`. Unknown
-commands still fail.
+### Configuration
 
-Root options go before the command name, and command options go after it. Each scope recognizes its own
-`--` separator. Root schemas with commands cannot also declare positional
-arguments; put those in the command schemas. This version supports one command
-level and one root schema per program.
+Define configuration macros before the implementation include:
 
-Root help bypasses command selection. Command help bypasses required checks in
-both scopes. Pass the parsed result to usage/help to select the relevant command;
-pass `NULL` for root usage/help. The selector is also set on command errors, so the
-same calls work when reporting failures. Missing root requirements select root
-usage instead.
+- `CLI_COMMANDS_REQUIRED`: defaults to `true`, which means that all commands are by default treated as required arguments. Set to `false` to allow root-only calls. With no command, `cmd_type` is `cli_cmd_none`.
+- `CLI_NDEBUG`: omit developer schema validation.
+- `CLI_BOLD(text)` and `CLI_UNDERLINE(text)`: override ANSI help styling. They must
+  expand to concatenatable string literals. To disable styling:
 
-See [examples/commands/main.c](examples/commands/main.c) for the complete greeting
-and addition example:
-
-```sh
-make -C examples/commands
-examples/commands/build/commands -v greet -c2 Pavel
-examples/commands/build/commands add 1.5 2
-examples/commands/build/commands greet --help
-```
+  ```c
+  #define CLI_BOLD(text) text
+  #define CLI_UNDERLINE(text) text
+  ```
 
 ## Parsing behavior
 
-- Short flags can be grouped: `-abc`. Values may follow a short option directly
-  or separately: `-c3`, `-c 3`. Long options accept `--count=3` and `--count 3`.
-- `--` ends option recognition.
-- Options can appear among scalar positional arguments.
-- **Once a trailing positional list receives its first token, all remaining
-  tokens belong to it**, including `-h`, `--help`, and `--`. Before the list
-  starts, a token beginning with `-` still looks like an option; use `--` when
-  the first list value begins with `-`.
-- Scalars and flags cannot repeat. Named lists accept repeated occurrences.
-- Required scalar positionals precede optional scalar positionals; at most one
-  positional list may follow them. Optional scalars consume available positional
-  tokens before the list. A required list needs at least one token.
-- `-h` and `--help` are reserved. Encountered help bypasses required checks.
-  Parsing stops at the first error, so help appearing after an error is not
-  processed.
-- Integers use decimal conversion; doubles use the C library's `strtod` and
-  current locale. Conversions require a complete, in-range value; doubles must
-  be finite. Leading whitespace is accepted by the numeric parsers.
+- Flags take no value. `-v` or `--verbose` sets a boolean field to `true`.
+  Short flags can be grouped: `-abc` means `-a -b -c`.
+- Options take one value. For a count option, write `-c 3`, `-c3`,
+  `--count 3`, or `--count=3`. A value is required whenever the option appears.
+- Positional arguments are assigned in declaration order.
+  In `app input.txt output.txt`, the first value goes to the first positional
+  field and the second goes to the next. Declare required positional arguments
+  before optional ones.
+- Flags and options can appear before or between positional arguments, but must
+  come before a positional list begins.
+- Option lists allow repetition: `--include src --include tests` calls the
+  list parser once for `src` and once for `tests`. Other options and flags cannot
+  be repeated.
+- A positional list takes everything left. Once its first value is read, all
+  remaining arguments belong to it, including `--help` and `--`. Put at most one
+  positional list last; optional positional arguments take their values before
+  the list. A required list needs at least one value.
+- `--` makes following arguments positional values, even if they start with `-`:
+  `app -- -filename`. A lone `-` is also a positional value.
+- Unknown options and extra positional arguments are errors. A default does not
+  satisfy the requirement to provide an argument marked `.required = true`.
+- `-h` and `--help` are provided automatically. Help works without supplying
+  required arguments, but an error encountered before the help flag still fails.
 
-Custom callbacks receive the input string, destination field, caller context,
-and error output. Return `CLI_OK` or `CLI_ERROR`; on failure supply a useful
-`error->message`, a 256-byte buffer. Use `snprintf(error->message,
-sizeof(error->message), "...", ...)` for formatted details or initialize the
-whole error with a string literal. Messages are truncated to fit and must be
-null-terminated. The library appends the quoted long option name
-(or short name when no long name exists), or the positional label, after the
-error message.
-`error->input` remains a borrowed pointer to the offending value; a callback may
-set it to identify a more specific part of that value. The library supplies the
-input and a fallback message if omitted. For example, reporting `--count=abc`
-prints `invalid or out-of-range unsigned integer: '--count': 'abc'` using the
-example's existing error-output code. Callbacks control list storage and capacity
-checks.
+## Custom parsers
 
-Each parse initializes fields from their defaults. Text values borrow `argv`
-strings without modifying them. List storage belongs to the application.
-Results may be partially updated on failure and should then be discarded.
-Schema checks are enabled by default and omitted with `CLI_NDEBUG`.
-The library allocates no heap memory. Parsing uses C99 variable-length arrays on
-the stack sized by the schema, with one frame for each active command scope.
+Use `CLI_ARG_OPTION` or `CLI_ARG_POSITIONAL` (or their `_LIST` versions respectively) when a field needs your own C type
+or validation rules. Provide a function that converts one argument's text into
+that field. The function receives:
 
-The parser neither prints nor exits. Call `cli_print_usage(stream, program, &args)`
-and `cli_print_help(stream, &args)` explicitly. Help uses ANSI bold and underline
-sequences by default. Override `CLI_BOLD(text)` and `CLI_UNDERLINE(text)` before
-the implementation include to change styling. Each macro must expand to a string
-literal suitable for concatenation. To disable styling:
+- `input`: the value alone, such as `"json"` from `--format json`.
+- `destination`: a pointer to the field in `Cli_Arguments`; cast it to a pointer
+  to your type, such as `OutputFormat *` below.
+- `context`: the pointer passed as the fourth argument to `cli_parse`, or `NULL`
+  when no extra data is needed.
+- `error`: where you write a reason if the value is invalid.
+
+For example, parse an output format into an enum:
 
 ```c
-#define CLI_BOLD(text) text
-#define CLI_UNDERLINE(text) text
+#define CLI_IMPLEMENTATION
+#include "cli.h"
+#include <string.h>
+
+typedef enum { FORMAT_TEXT, FORMAT_JSON } OutputFormat;
+
+static Cli_ParseStatus parse_format(char *input, void *destination, void *context, Cli_ParseError *error) {
+    (void)context;
+    OutputFormat format;
+    if (strcmp(input, "text") == 0) format = FORMAT_TEXT;
+    else if (strcmp(input, "json") == 0) format = FORMAT_JSON;
+    else {
+        snprintf(error->message, sizeof(error->message), "expected text or json");
+        return CLI_ERROR;
+    }
+    *(OutputFormat *)destination = format;
+    return CLI_OK;
+}
+
+#define CLI_ARGUMENTS \
+    CLI_ARG_OPTION(OutputFormat, format, parse_format, .long_name = "format", \
+        .default_value = FORMAT_TEXT, .label = "FORMAT")
+#include "cli.h"
 ```
 
-Each macro can be overridden independently. Styling is configured at compile
-time; the library does not detect terminals. Default values are not automatically
-printed.
+The first include makes the library types available to the callback. The second
+uses the schema to generate the argument struct and implementation. Call
+`cli_parse` as in Setup: `--format json` gives `args.format == FORMAT_JSON`;
+omitting the option uses `FORMAT_TEXT`.
+
+Return `CLI_OK` after writing the field, or `CLI_ERROR` with a null-terminated
+message in `error->message`. The library adds the argument name and supplies the
+failing input automatically; the callback should not print or exit. Built-in
+parsers `cli_parse_flag`, `cli_parse_text`, `cli_parse_i64`, `cli_parse_u64`, and
+`cli_parse_f64` have the same signature and can be reused.
+
+For lists, the callback receives the same field for each value. Use a struct
+holding an array and a length; append each value and report an error when full or perform array resizing.
+Storage and capacity checks belong to your code. Text values borrow `argv`
+strings, so they stay valid only while those strings remain available.
+
+## Limitations
+
+- One root schema per program and one level of subcommands.
+- Root options precede the command; root positionals cannot coexist with commands.
+- Defaults are runtime expressions, evaluated during parsing and again when
+  printing usage or help. Prefer expressions without side effects.
+- Help does not print default values or detect terminals automatically.
 
 ## License
 
-The library and examples are MIT licensed; see [LICENSE](LICENSE).
+[MIT](LICENSE).
