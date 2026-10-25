@@ -22,7 +22,7 @@
 #include "../../cli.h"
 
 int main(int argc, char *argv[]) {
-    Cli_ParsedArgs args;
+    Cli_Arguments args;
     Cli_ParseError error;
     Cli_ParseStatus status = cli_parse(argc, argv, &args, NULL, &error);
 

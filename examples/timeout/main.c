@@ -66,7 +66,7 @@ static Cli_ParseStatus parse_argument(char *input, void *destination, void *cont
 #undef CLI_ARGUMENTS
 
 int main(int argc, char *argv[]) {
-    Cli_ParsedArgs args;
+    Cli_Arguments args;
     Cli_ParseError error;
     Cli_ParseStatus status = cli_parse(argc, argv, &args, NULL, &error);
 

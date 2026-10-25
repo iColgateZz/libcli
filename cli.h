@@ -13,7 +13,7 @@ typedef enum {
 } Cli_ParseStatus;
 
 typedef struct Cli_ParseError Cli_ParseError;
-typedef struct Cli_ParsedArgs Cli_ParsedArgs;
+typedef struct Cli_Arguments Cli_Arguments;
 
 typedef Cli_ParseStatus (*Cli_Parser)(char *input, void *destination, void *context, Cli_ParseError *error);
 
@@ -22,9 +22,9 @@ struct Cli_ParseError {
     char message[256];
 };
 
-Cli_ParseStatus cli_parse(int argc, char *argv[], Cli_ParsedArgs *out, void *context, Cli_ParseError *error);
-void cli_print_usage(FILE *stream, char *program, Cli_ParsedArgs *args);
-void cli_print_help(FILE *stream, Cli_ParsedArgs *args);
+Cli_ParseStatus cli_parse(int argc, char *argv[], Cli_Arguments *out, void *context, Cli_ParseError *error);
+void cli_print_usage(FILE *stream, char *program, Cli_Arguments *args);
+void cli_print_help(FILE *stream, Cli_Arguments *args);
 
 Cli_ParseStatus cli_parse_flag(char *input, void *destination, void *context, Cli_ParseError *error);
 Cli_ParseStatus cli_parse_text(char *input, void *destination, void *context, Cli_ParseError *error);
@@ -105,7 +105,7 @@ typedef enum {
 #endif //CLI_COMMANDS
 
 
-struct Cli_ParsedArgs {
+struct Cli_Arguments {
     CLI_ARGUMENTS
 #ifdef CLI_COMMANDS
     Cli_Command cmd_type;
@@ -155,7 +155,7 @@ typedef struct Cli__Command Cli__Command;
 
 typedef struct {
     size_t argument_count;
-    void (*build)(Cli__ArgumentSpec *arguments, Cli_ParsedArgs *out);
+    void (*build)(Cli__ArgumentSpec *arguments, Cli_Arguments *out);
     Cli__Command *commands;
     size_t command_count;
     bool commands_required;
@@ -174,23 +174,23 @@ struct Cli__Command {
 #define CLI_UNDERLINE(text) "\033[4m" text "\033[0m"
 #endif
 
-static Cli_ParseStatus cli__parse_schema(Cli__Schema *schema, int argc, char *argv[], Cli_ParsedArgs *out,
+static Cli_ParseStatus cli__parse_schema(Cli__Schema *schema, int argc, char *argv[], Cli_Arguments *out,
                                    void *context, size_t *selected, Cli_ParseError *error);
 static Cli_ParseStatus cli__parse_tokens(size_t count, Cli__ArgumentSpec arguments[], bool seen[], void *context,
                                    int argc, char *argv[], int *command_position, Cli_ParseError *error);
 #ifndef CLI_NDEBUG
 static Cli_ParseStatus cli__validate_schema(Cli__Schema *schema, Cli__ArgumentSpec arguments[], Cli_ParseError *error);
 #endif
-static Cli__Schema *cli__select_schema(Cli_ParsedArgs *args);
-static void cli__build_schema(Cli__Schema *schema, Cli__ArgumentSpec arguments[], Cli_ParsedArgs *out);
-static void cli__build_root(Cli__ArgumentSpec *arguments, Cli_ParsedArgs *out);
+static Cli__Schema *cli__select_schema(Cli_Arguments *args);
+static void cli__build_schema(Cli__Schema *schema, Cli__ArgumentSpec arguments[], Cli_Arguments *out);
+static void cli__build_root(Cli__ArgumentSpec *arguments, Cli_Arguments *out);
 static bool cli__is_positional(Cli__ArgumentSpec *argument);
 static Cli_ParseStatus cli__set_error(Cli_ParseError *error, char *input, char *message);
 static Cli_ParseStatus cli__set_argument_error(Cli_ParseError *error, Cli__ArgumentSpec *argument,
                                              char *input, char *message);
 #ifdef CLI_COMMANDS
 #define CLI_PRIVATE_COMMAND(field, ...) \
-    static void cli__build_command_##field(Cli__ArgumentSpec *arguments, Cli_ParsedArgs *parent);
+    static void cli__build_command_##field(Cli__ArgumentSpec *arguments, Cli_Arguments *parent);
 CLI_COMMANDS
 #undef CLI_PRIVATE_COMMAND
 #endif
@@ -225,8 +225,8 @@ static Cli__Schema cli__root_schema = {
 #undef CLI_PRIVATE_ARG
 #undef CLI_PRIVATE_NO_ARGUMENTS
 
-Cli_ParseStatus cli_parse(int argc, char *argv[], Cli_ParsedArgs *out, void *context, Cli_ParseError *error) {
-    *out = (Cli_ParsedArgs) {0};
+Cli_ParseStatus cli_parse(int argc, char *argv[], Cli_Arguments *out, void *context, Cli_ParseError *error) {
+    *out = (Cli_Arguments) {0};
     *error = (Cli_ParseError) {0};
     size_t selected;
     Cli_ParseStatus status = cli__parse_schema(&cli__root_schema, argc, argv, out, context, &selected, error);
@@ -236,7 +236,7 @@ Cli_ParseStatus cli_parse(int argc, char *argv[], Cli_ParsedArgs *out, void *con
     return status;
 }
 
-void cli_print_usage(FILE *stream, char *program, Cli_ParsedArgs *args) {
+void cli_print_usage(FILE *stream, char *program, Cli_Arguments *args) {
     Cli__Schema *schema = cli__select_schema(args);
     size_t count = schema->argument_count;
     Cli__ArgumentSpec arguments[count];
@@ -294,7 +294,7 @@ void cli_print_usage(FILE *stream, char *program, Cli_ParsedArgs *args) {
     fputc('\n', stream);
 }
 
-void cli_print_help(FILE *stream, Cli_ParsedArgs *args) {
+void cli_print_help(FILE *stream, Cli_Arguments *args) {
     Cli__Schema *schema = cli__select_schema(args);
     size_t count = schema->argument_count;
     Cli__ArgumentSpec arguments[count];
@@ -348,7 +348,7 @@ void cli_print_help(FILE *stream, Cli_ParsedArgs *args) {
     }
 }
 
-static Cli_ParseStatus cli__parse_schema(Cli__Schema *schema, int argc, char *argv[], Cli_ParsedArgs *out,
+static Cli_ParseStatus cli__parse_schema(Cli__Schema *schema, int argc, char *argv[], Cli_Arguments *out,
                                    void *context, size_t *selected, Cli_ParseError *error) {
     size_t count = schema->argument_count;
     Cli__ArgumentSpec arguments[count];
@@ -589,7 +589,7 @@ static Cli_ParseStatus cli__validate_schema(Cli__Schema *schema, Cli__ArgumentSp
 }
 #endif //CLI_NDEBUG
 
-static Cli__Schema *cli__select_schema(Cli_ParsedArgs *args) {
+static Cli__Schema *cli__select_schema(Cli_Arguments *args) {
 #ifdef CLI_COMMANDS
     if (args && args->cmd_type > cli_cmd_none && (size_t)args->cmd_type < cli__root_schema.command_count)
         return &cli__commands[args->cmd_type].schema;
@@ -599,7 +599,7 @@ static Cli__Schema *cli__select_schema(Cli_ParsedArgs *args) {
     return &cli__root_schema;
 }
 
-static void cli__build_schema(Cli__Schema *schema, Cli__ArgumentSpec arguments[], Cli_ParsedArgs *out) {
+static void cli__build_schema(Cli__Schema *schema, Cli__ArgumentSpec arguments[], Cli_Arguments *out) {
     schema->build(arguments, out);
     arguments[schema->argument_count - 1] = (Cli__ArgumentSpec) {
         .kind = CLI_ARGUMENT_FLAG, .short_name = 'h', .long_name = "help", .description = "Show usage",
@@ -648,7 +648,7 @@ static void cli__build_schema(Cli__Schema *schema, Cli__ArgumentSpec arguments[]
     }; \
 }
 
-static void cli__build_root(Cli__ArgumentSpec *arguments, Cli_ParsedArgs *out) {
+static void cli__build_root(Cli__ArgumentSpec *arguments, Cli_Arguments *out) {
     size_t index = 0;
     CLI_ARGUMENTS
     (void)arguments; (void)out; (void)index;
@@ -656,7 +656,7 @@ static void cli__build_root(Cli__ArgumentSpec *arguments, Cli_ParsedArgs *out) {
 
 #ifdef CLI_COMMANDS
 #define CLI_PRIVATE_COMMAND(field, name, description, schema) \
-    static void cli__build_command_##field(Cli__ArgumentSpec *arguments, Cli_ParsedArgs *parent) { \
+    static void cli__build_command_##field(Cli__ArgumentSpec *arguments, Cli_Arguments *parent) { \
         Cli_CommandArgs_##field *out = parent ? &parent->cmd.field : NULL; \
         if (parent) \
             parent->cmd_type = cli_cmd_##field; \
