@@ -3,6 +3,10 @@
 libcli is a single-header C99 library that generates a command-line interface from an argument schema.
 Declare flags, options, and positional arguments once, then libcli generates typed result structs and  code for parsing arguments and printing usage and help.
 
+## Version
+
+Current version: 2.0.0, following [Semantic Versioning](https://semver.org/).
+
 ## Setup
 
 Copy `cli.h` into your project. Declare fields with `CLI_ARGUMENTS` and define

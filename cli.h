@@ -1,6 +1,11 @@
 #ifndef CLI_INCLUDE
 #define CLI_INCLUDE
 
+#define CLI_VERSION_MAJOR 2
+#define CLI_VERSION_MINOR 0
+#define CLI_VERSION_PATCH 0
+#define CLI_VERSION "2.0.0"
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
