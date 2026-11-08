@@ -43,8 +43,8 @@ Build with `cc -std=c99 example.c` and run `./a.out -c 3 localhost`.
 ## Other Examples
 
 - [Commands](examples/commands/main.c): typed subcommands and flags.
-- [Command tree](examples/tree/schema.h): nested subcommands in one executable.
 - [Timeout](examples/timeout/main.c): custom parsers and a trailing argument list.
+- [Command tree](examples/tree/schema.h): nested subcommands in one executable.
 
 
 ## Public API
@@ -107,8 +107,7 @@ Define `CLI_COMMANDS` before including the library:
 
 Inside the `Cli_Arguments` struct, this creates a union member `cmd` and an enum `cmd_type`. Use the `cmd_type` member to access the correct subcommand's parsed values.
 
-For nested commands, define a named child before its parent. Each child uses
-`CLI_COMMAND_REF_NAME` and the same argument and command macros:
+For arbitrarily deeply nested commands, use named child schemas:
 
 ```c
 #define CLI_IMPLEMENTATION
@@ -116,45 +115,32 @@ For nested commands, define a named child before its parent. Each child uses
 #define CLI_COMMAND_REF_NAME Remote
 #define CLI_COMMANDS \
     CLI_COMMAND(add, "add", "Add a remote", ADD_ARGUMENTS)
+
+#define ADD_ARGUMENTS \
+    // Some definition
 #include "cli.h"
 
-#define CLI_ARGUMENTS CLI_NO_ARGUMENTS
+
 #define CLI_COMMANDS \
     CLI_COMMAND_REF(remote, "remote", "Manage remotes", Remote)
 #include "cli.h"
 ```
 
-Define `ADD_ARGUMENTS` before this example. `app remote add ...` fills
-`args.cmd.remote.cmd.add`. Check `args.cmd_type == Cli_Command_remote`, then
-`args.cmd.remote.cmd_type == Remote_Command_add`. The child types are
-`Remote_Arguments` and `Remote_CommandType`; its no-command value is `Remote_Command_none`.
-The root keeps `Cli_Arguments`, `Cli_CommandType`, and `Cli_Command_*`.
-Inline command argument structs use `<schema>_Arguments_<command>`, such as
-`Remote_Arguments_add`. The command enum is stored in `cmd_type`.
+`app remote add ...` fills `args.cmd.remote.cmd.add`. 
 
 A named include consumes `CLI_COMMAND_REF_NAME`, `CLI_ARGUMENTS`, `CLI_COMMANDS`, and
-`CLI_COMMANDS_REQUIRED`, leaving the next schema a fresh configuration. Define
-children before parents and the unnamed root last. A child can reference earlier
-children or be reused by multiple commands. There is no fixed nesting depth.
+`CLI_COMMANDS_REQUIRED`, leaving the next schema a fresh configuration.
 
-The three public functions always use the root. Usage and help follow the selected
-command path, including on parsing errors. Options belong to their own level and
-must appear before that level's subcommand. Set `CLI_COMMANDS_REQUIRED false`
-before a schema's include to make its commands optional.
-
-To share the types between source files, put the complete child-to-root sequence
-in a guarded application header, as in the command-tree example. Define
-`CLI_IMPLEMENTATION` **before including that application header** in exactly one
-C file; other files include it normally.
+For a more in-depth explanation, please consult the example [Command tree](examples/tree/schema.h).
 
 ### Configuration
 
 Define configuration macros before the implementation include:
 
 - `CLI_COMMAND_REF_NAME`: generate a named child schema. Omit it for the single root.
-- `CLI_COMMANDS_REQUIRED`: defaults to `true`; a schema with commands requires
+- `CLI_COMMANDS_REQUIRED`: defaults to `true`. A schema with commands requires
   one of them to be selected. Set to `false` to allow stopping at that level.
-  With no command selected, its `cmd_type` is the corresponding `*_Command_none`.
+  With no command selected, its `cmd_type` is the `<schema_name>_Command_none`.
 - `CLI_NDEBUG`: omit developer schema validation.
 - `CLI_BOLD(text)` and `CLI_UNDERLINE(text)`: override ANSI help styling. They must
   expand to concatenatable string literals. To disable styling:
@@ -249,11 +235,6 @@ strings, so they stay valid only while those strings remain available.
 
 ## Limitations
 
-- One root schema per program. Named child schemas compose its command tree;
-  they are not independently parsed through the public API. All source files
-  share the same `Cli_Arguments` type and `cli_parse` function.
-- Commands and positional arguments cannot coexist at the same level. Use
-  options at command-group levels and positionals in leaf commands.
 - Root options go before the subcommand. If `-v` belongs to the main command,
   write `app -v send file`. After `send`, only options declared for `send` are
   recognized.
