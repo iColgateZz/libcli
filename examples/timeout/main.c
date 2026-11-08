@@ -82,7 +82,7 @@ int main(int argc, char *argv[]) {
         if (error.input) fprintf(stderr, ": '%s'", error.input);
         fputc('\n', stderr);
         cli_print_usage(stderr, argv[0], &args);
-        return -1;
+        return 1;
     }
 
     args.command.items[args.command.size] = NULL;

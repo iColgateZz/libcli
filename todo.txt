@@ -1,3 +1,2 @@
 1. Defaults in help text
-2. Deeper subcommand nesting?
-3. defaults are evaluated multiple times
+2. defaults are evaluated multiple times

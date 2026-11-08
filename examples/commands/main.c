@@ -38,24 +38,37 @@ int main(int argc, char *argv[]) {
         if (error.input) fprintf(stderr, "; given '%s'", error.input);
         fputc('\n', stderr);
         cli_print_usage(stderr, argv[0], &args);
-        return 2;
+        return 1;
     }
 
     switch (args.cmd_type) {
-        case cli_cmd_greet:
-            if (args.verbose) fprintf(stderr, "command: greet\n");
-            for (uint64_t i = 0; i < args.cmd.greet.count; ++i)
-                printf("Hello, %s!\n", args.cmd.greet.name);
-            break;
+        case Cli_Command_greet: {
+            if (args.verbose)
+                fprintf(stderr, "command: greet\n");
 
-        case cli_cmd_add:
-            if (args.verbose) fprintf(stderr, "command: add\n");
-            printf("%g\n", args.cmd.add.left + args.cmd.add.right);
-            break;
+            Cli_Arguments_greet greet = args.cmd.greet;
+            for (uint64_t i = 0; i < greet.count; ++i)
+                printf("Hello, %s!\n", greet.name);
 
-        case cli_cmd_none:
-            if (args.verbose) fprintf(stderr, "no command selected\n");
             break;
+        }
+
+        case Cli_Command_add: {
+            if (args.verbose)
+                fprintf(stderr, "command: add\n");
+
+            Cli_Arguments_add add = args.cmd.add;
+            printf("%g\n", add.left + add.right);
+
+            break;
+        }
+
+        case Cli_Command_none: {
+            if (args.verbose)
+                fprintf(stderr, "no command selected\n");
+
+            break;
+        }
     }
 
     return 0;
