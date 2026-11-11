@@ -3,8 +3,8 @@
 
 #define CLI_VERSION_MAJOR 2
 #define CLI_VERSION_MINOR 0
-#define CLI_VERSION_PATCH 0
-#define CLI_VERSION "2.0.0"
+#define CLI_VERSION_PATCH 1
+#define CLI_VERSION "2.0.1"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -862,12 +862,10 @@ static Cli_ParseStatus cli__set_argument_error(Cli_ParseError *error, Cli__Argum
         snprintf(result.message, sizeof(result.message), "%s: --%s", message, argument->long_name);
     else if (argument->short_name)
         snprintf(result.message, sizeof(result.message), "%s: -%c", message, argument->short_name);
-    else {
-        char *arg = argument->label
-                    ? argument->label
-                    : "argument";
-        snprintf(result.message, sizeof(result.message), "%s: %s", message, arg);
-    }
+    else if (argument->label)
+        snprintf(result.message, sizeof(result.message), "%s: %s", message, argument->label);
+    else
+        snprintf(result.message, sizeof(result.message), "%s", message);
 
     *error = result;
     return CLI_ERROR;
